@@ -11,8 +11,8 @@ window.CONFIG = {
 
   /* ---- Supabase (leave blank to run fully offline) ----
      Get these from Supabase Dashboard -> Project Settings -> API  */
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_URL: "https://wudqimkxqsylvakiuwuz.supabase.co/rest/v1/",
+  SUPABASE_ANON_KEY: "sb_publishable__BGdeh4R0ZJDhGAAX84fAg_c43DgV4v",
   PHOTO_BUCKET: "booth-photos",
   FRAME_BUCKET: "booth-frames",
 
