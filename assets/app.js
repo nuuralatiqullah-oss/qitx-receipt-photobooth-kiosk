@@ -308,13 +308,20 @@
       header: CFG.BOOTH_NAME,
       subheader: CFG.EVENT_NAME,
       footer: CFG.FOOTER_LINE,
-      stamp: stamp(new Date())
+      stamp: stamp(new Date()),
+      photo: {
+        dotSize: CFG.PHOTO_DOT_SIZE,
+        dither: CFG.DITHER,
+        gamma: CFG.PHOTO_GAMMA,
+        autoLevels: CFG.PHOTO_AUTO_LEVELS,
+        sharpen: CFG.PHOTO_SHARPEN,
+        blurPasses: CFG.PHOTO_BLUR
+      }
     });
 
+    // Photos are already 1-bit, so this only thresholds text/borders.
     state.prepared = window.Imaging.prepareForPrint(state.sheet, {
-      brightness: CFG.BRIGHTNESS,
-      blurPasses: CFG.BLUR_PASSES,
-      contrastStretch: CFG.CONTRAST_STRETCH
+      dither: CFG.DITHER
     });
 
     // Preview shows the real 1-bit result, so what you see is what prints.

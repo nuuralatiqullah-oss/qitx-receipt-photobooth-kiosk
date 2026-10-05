@@ -78,8 +78,10 @@ silently. After a full tablet restart you may need to tap once more.
 |---|---|
 | `PRINT_WIDTH_DOTS` | `576` for 80mm paper, `384` for 58mm. Wrong value = cropped prints. |
 | `CUT_MODE` | `"partial"` leaves a tab to tear; `"full"` cuts clean through. |
-| `BLUR_PASSES` | Raise to `2` if photos print like TV static. |
-| `BRIGHTNESS` | Raise above `1.05` if prints come out too dark and muddy. |
+| `PHOTO_DOT_SIZE` | **The main dial for photo quality.** `1` finest, `2` recommended, `3` chunky retro. |
+| `DITHER` | `"atkinson"` (clean, recommended) or `"floyd"` (finer but muddier). |
+| `PHOTO_GAMMA` | Lower (e.g. `0.7`) if prints are too dark. |
+| `PHOTO_SHARPEN` | Raise toward `1.2` for punchier edges. |
 | `COUNTDOWN_SECONDS` | Seconds before each shot. |
 | `AUTO_PRINT_COPIES` | Print 2 copies per session (one for the guest, one for the guestbook). |
 | `IDLE_RESET_SECONDS` | Auto-return to the welcome screen between guests. |
@@ -131,8 +133,20 @@ Unplug and replug, and close any Citizen utility app.
 **Right side of the print is cut off** — You're on 58mm paper. Set
 `PRINT_WIDTH_DOTS: 384`.
 
-**Prints look like static** — Set `BLUR_PASSES: 2` and raise `BRIGHTNESS`
-a little. Photos with busy backgrounds (foliage, crowds) dither worst.
+**Photos print dark and muddy, but text is sharp** — This is not the
+printer. A thermal head spreads heat into neighbouring dots, so
+single-dot detail merges into solid black. Fixes, in order of impact:
+
+1. **Light the subject's face.** A backlit guest (window or bright wall
+   behind them) is the single biggest cause. A cheap ring light on the
+   tablet fixes more than any setting here.
+2. **Raise `PHOTO_DOT_SIZE` to `2` or `3`.** Printing each photo pixel as
+   a 2x2 or 3x3 block of dots survives the bleed. Text is unaffected.
+3. **Lower `PHOTO_GAMMA`** to `0.7` or `0.65` to lighten midtones.
+4. **Turn the printer's print density down** in the Citizen utility or
+   DIP switches. Less heat means less spread.
+5. Keep `DITHER: "atkinson"`. Floyd-Steinberg pushes error into the
+   highlights and greys out clean white areas.
 
 **Nothing cuts** — Try `CUT_MODE: "full"`, and raise `FEED_BEFORE_CUT` so
 the artwork clears the cutter blade before it fires.
@@ -148,7 +162,7 @@ public. Re-run `supabase-setup.sql`.
 index.html              screens + styling
 assets/config.js        everything you edit per event
 assets/frames.js        built-in frame layouts
-assets/imaging.js       compose, blur, contrast, Floyd-Steinberg dither
+assets/imaging.js       per-photo levels, gamma, dot size, Atkinson dither
 assets/printer.js       WebUSB + ESC/POS (raster, auto-cut)
 assets/app.js           kiosk flow
 supabase-setup.sql      tables, RLS, storage buckets

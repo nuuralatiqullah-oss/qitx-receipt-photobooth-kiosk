@@ -4,15 +4,15 @@
    ============================================================ */
 window.CONFIG = {
   /* ---- Branding ---- */
-  BOOTH_NAME: "RECIEPT PHOTOBOOTH",
-  EVENT_NAME: "by @qitx_exclusive",
-  TAGLINE: "SNAP IT & PRINT IT",
-  FOOTER_LINE: "Follow us on instagram @qitx_exclusive",
+  BOOTH_NAME: "NUURAL BOOTH",
+  EVENT_NAME: "Walimatul Urus",
+  TAGLINE: "Ambil gambar, terus cetak",
+  FOOTER_LINE: "Terima kasih kerana hadir",
 
   /* ---- Supabase (leave blank to run fully offline) ----
      Get these from Supabase Dashboard -> Project Settings -> API  */
-  SUPABASE_URL: "https://wudqimkxqsylvakiuwuz.supabase.co/rest/v1/",
-  SUPABASE_ANON_KEY: "sb_publishable__BGdeh4R0ZJDhGAAX84fAg_c43DgV4v",
+  SUPABASE_URL: "",
+  SUPABASE_ANON_KEY: "",
   PHOTO_BUCKET: "booth-photos",
   FRAME_BUCKET: "booth-frames",
 
@@ -30,13 +30,36 @@ window.CONFIG = {
   USB_CHUNK_BYTES: 4096,    // WebUSB transferOut chunk size
   RASTER_BAND_ROWS: 128,    // rows per GS v 0 band (keep <= 255)
 
-  /* ---- Image tuning ----
-     Thermal printing is 1-bit. These control how the photo is
-     converted before dithering. Raise BLUR if prints look like
-     TV static; raise CONTRAST if they look flat and grey. */
-  BLUR_PASSES: 1,
-  CONTRAST_STRETCH: true,
-  BRIGHTNESS: 1.05,         // >1 = lighter print (saves ink burn, less mud)
+  /* ---- Photo look on thermal paper ----
+     The printer is only black or white — there is no grey. These
+     control how a photo is turned into dots. Start here if prints
+     look muddy or noisy. */
+
+  /* Dot size is the biggest lever. 1 = finest detail but thermal
+     heat bleeds between dots and faces turn to mush. 2 is the sweet
+     spot for portraits. 3 is a chunky, very legible retro look.
+     Text always prints at full resolution regardless. */
+  PHOTO_DOT_SIZE: 2,
+
+  /* "atkinson" keeps whites clean and faces readable (recommended).
+     "floyd"  is finer grained but goes muddy on dark photos. */
+  DITHER: "atkinson",
+
+  /* <1 lightens midtones. Thermal printing always comes out darker
+     than it looks on screen, so 0.8 compensates. Lower = lighter. */
+  PHOTO_GAMMA: 0.8,
+
+  /* Rescue backlit or dim photos by stretching each photo's own
+     tonal range to full black-to-white. Leave this on. */
+  PHOTO_AUTO_LEVELS: true,
+
+  /* Edge definition put back after downsampling. 0 = off,
+     0.6 = natural, 1.2 = punchy. Too high looks like a woodcut. */
+  PHOTO_SHARPEN: 0.6,
+
+  /* Noise reduction before dithering. 0 is usually right once
+     PHOTO_DOT_SIZE is 2 or more. Raise to 1 for grainy cameras. */
+  PHOTO_BLUR: 0,
 
   /* ---- Booth behaviour ---- */
   COUNTDOWN_SECONDS: 3,
