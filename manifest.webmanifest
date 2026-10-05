@@ -1,0 +1,10 @@
+{
+  "name": "Photobooth Kiosk",
+  "short_name": "Booth",
+  "start_url": ".",
+  "display": "fullscreen",
+  "orientation": "portrait",
+  "background_color": "#0f0f10",
+  "theme_color": "#0f0f10",
+  "icons": []
+}

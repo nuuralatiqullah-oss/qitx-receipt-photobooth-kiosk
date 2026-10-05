@@ -1,0 +1,225 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<meta name="theme-color" content="#0f0f10">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<title>Photobooth Kiosk</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=Inter:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0f0f10;
+    --panel:#1a1a1d;
+    --line:#2d2d32;
+    --ink:#f5f5f4;
+    --muted:#9a9a a0;
+    --muted:#9a9aa0;
+    --accent:#e8dcc8;
+    --accent-ink:#141414;
+    --danger:#e05a4b;
+    --ok:#4ca97a;
+    --radius:18px;
+  }
+  *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;margin:0}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:Inter,system-ui,-apple-system,sans-serif;
+    overflow:hidden;user-select:none;
+  }
+  .screen{position:fixed;inset:0;display:none;flex-direction:column;padding:env(safe-area-inset-top) 0 0}
+  .screen.active{display:flex}
+
+  /* ---------- header ---------- */
+  header{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:14px 20px;border-bottom:1px solid var(--line);gap:12px;flex:0 0 auto;
+  }
+  .brand{font-family:'Bebas Neue',sans-serif;font-size:26px;letter-spacing:.14em;line-height:1}
+  .brand small{display:block;font-family:Inter;font-size:10px;letter-spacing:.22em;color:var(--muted);margin-top:4px;font-weight:600}
+  .chip{
+    display:inline-flex;align-items:center;gap:8px;border:1px solid var(--line);
+    border-radius:999px;padding:9px 16px;font-size:11px;font-weight:800;
+    letter-spacing:.14em;text-transform:uppercase;background:transparent;color:var(--ink);
+    min-height:44px;
+  }
+  .dot{width:9px;height:9px;border-radius:50%;background:var(--danger)}
+  .dot.on{background:var(--ok)}
+
+  /* ---------- shared ---------- */
+  .body{flex:1;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:24px 20px 28px}
+  .center{display:flex;flex-direction:column;align-items:center;justify-content:center;text-align:center;height:100%}
+  h1{font-family:'Bebas Neue',sans-serif;font-size:clamp(44px,9vw,86px);letter-spacing:.04em;margin:0 0 6px}
+  h2{font-family:'Bebas Neue',sans-serif;font-size:28px;letter-spacing:.1em;margin:0 0 16px;font-weight:400}
+  .lead{color:var(--muted);font-size:15px;max-width:34ch;margin:0 auto 34px;line-height:1.6}
+  .btn{
+    border:none;border-radius:999px;padding:18px 44px;font-size:13px;font-weight:800;
+    letter-spacing:.2em;text-transform:uppercase;background:var(--accent);color:var(--accent-ink);
+    min-height:60px;cursor:pointer;transition:transform .15s ease,opacity .15s ease;
+  }
+  .btn:active{transform:scale(.97)}
+  .btn[disabled]{opacity:.4}
+  .btn.ghost{background:transparent;color:var(--ink);border:1px solid var(--line)}
+  .btn.block{width:100%;max-width:420px}
+  .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;width:100%;max-width:520px}
+  .row .btn{flex:1 1 160px}
+
+  /* ---------- frame picker ---------- */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:16px;max-width:900px;margin:0 auto}
+  .frame-card{
+    background:var(--panel);border:2px solid var(--line);border-radius:var(--radius);
+    overflow:hidden;padding:0;cursor:pointer;position:relative;aspect-ratio:2/3;
+  }
+  .frame-card.sel{border-color:var(--accent);box-shadow:0 0 0 4px rgba(232,220,200,.14)}
+  .frame-card canvas{width:100%;height:100%;object-fit:contain;background:#fff;display:block}
+  .frame-card .label{
+    position:absolute;left:0;right:0;bottom:0;background:linear-gradient(transparent,rgba(0,0,0,.85));
+    padding:26px 10px 10px;font-size:11px;font-weight:800;letter-spacing:.12em;text-transform:uppercase;
+  }
+  .footer-bar{padding:16px 20px calc(16px + env(safe-area-inset-bottom));border-top:1px solid var(--line);display:flex;justify-content:center;flex:0 0 auto}
+
+  /* ---------- capture ---------- */
+  .stage{flex:1;position:relative;background:#000;overflow:hidden;display:flex;align-items:center;justify-content:center}
+  #video{width:100%;height:100%;object-fit:cover}
+  #video.mirror{transform:scaleX(-1)}
+  .count{
+    position:absolute;inset:0;display:none;align-items:center;justify-content:center;
+    font-family:'Bebas Neue',sans-serif;font-size:min(42vw,280px);color:#fff;
+    text-shadow:0 8px 40px rgba(0,0,0,.6);
+  }
+  .count.show{display:flex}
+  .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
+  .flash.fire{animation:flash .45s ease-out}
+  @keyframes flash{0%{opacity:.95}100%{opacity:0}}
+  .shots{
+    position:absolute;left:0;right:0;bottom:0;display:flex;gap:8px;justify-content:center;
+    padding:14px;background:linear-gradient(transparent,rgba(0,0,0,.7));
+  }
+  .thumb{width:54px;height:72px;border-radius:8px;border:2px solid rgba(255,255,255,.4);background:#222;overflow:hidden}
+  .thumb img{width:100%;height:100%;object-fit:cover;display:block}
+  .thumb.done{border-color:var(--accent)}
+  .hint{position:absolute;top:16px;left:0;right:0;text-align:center;font-size:12px;letter-spacing:.18em;text-transform:uppercase;color:#fff;opacity:.85}
+
+  /* ---------- review / result ---------- */
+  .sheet{
+    background:#fff;border-radius:10px;max-height:58vh;width:auto;display:block;margin:0 auto 22px;
+    box-shadow:0 20px 60px rgba(0,0,0,.5);
+  }
+  #qrBox{background:#fff;padding:12px;border-radius:12px;display:none;margin:0 auto 18px}
+  #qrBox canvas,#qrBox img{display:block}
+
+  .toast{
+    position:fixed;left:50%;bottom:26px;transform:translateX(-50%);
+    background:#2a2a2e;border:1px solid var(--line);border-radius:12px;
+    padding:14px 18px;font-size:13px;max-width:90vw;z-index:99;display:none;line-height:1.5;
+  }
+  .toast.err{border-color:var(--danger)}
+  .toast.show{display:block}
+  .spin{width:34px;height:34px;border:3px solid var(--line);border-top-color:var(--accent);border-radius:50%;animation:sp 1s linear infinite;margin:0 auto 18px}
+  @keyframes sp{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+
+<!-- ============ WELCOME ============ -->
+<section id="scrWelcome" class="screen active">
+  <header>
+    <div class="brand" id="brandName">BOOTH<small id="brandEvent"></small></div>
+    <button class="chip" id="btnPrinter"><span class="dot" id="printerDot"></span><span id="printerLabel">Printer</span></button>
+  </header>
+  <div class="body">
+    <div class="center">
+      <h1 id="welcomeTitle">SAY CHEESE</h1>
+      <p class="lead" id="welcomeLead"></p>
+      <button class="btn" id="btnStart">Start</button>
+    </div>
+  </div>
+</section>
+
+<!-- ============ FRAME PICKER ============ -->
+<section id="scrFrames" class="screen">
+  <header>
+    <button class="chip" id="btnFramesBack">Back</button>
+    <div class="brand" style="font-size:20px">SELECT FRAME</div>
+    <button class="chip" id="btnPrinter2"><span class="dot" id="printerDot2"></span>Printer</button>
+  </header>
+  <div class="body"><div class="grid" id="frameGrid"></div></div>
+  <div class="footer-bar"><button class="btn block" id="btnUseFrame" disabled>Use this frame</button></div>
+</section>
+
+<!-- ============ CAPTURE ============ -->
+<section id="scrCapture" class="screen">
+  <header>
+    <button class="chip" id="btnCaptureBack">Back</button>
+    <div class="brand" style="font-size:20px" id="captureCount">1 / 3</div>
+    <button class="chip" id="btnFlip">Flip</button>
+  </header>
+  <div class="stage">
+    <video id="video" playsinline autoplay muted></video>
+    <div class="hint" id="captureHint">Tap the button when ready</div>
+    <div class="count" id="countdown">3</div>
+    <div class="flash" id="flash"></div>
+    <div class="shots" id="shots"></div>
+  </div>
+  <div class="footer-bar"><button class="btn block" id="btnShoot">Take photo</button></div>
+</section>
+
+<!-- ============ REVIEW ============ -->
+<section id="scrReview" class="screen">
+  <header>
+    <div class="brand" style="font-size:20px">YOUR PRINT</div>
+    <button class="chip" id="btnPrinter3"><span class="dot" id="printerDot3"></span>Printer</button>
+  </header>
+  <div class="body">
+    <div class="center">
+      <canvas id="previewCanvas" class="sheet"></canvas>
+      <div class="row">
+        <button class="btn ghost" id="btnRetake">Retake</button>
+        <button class="btn" id="btnPrint">Print</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ PRINTING ============ -->
+<section id="scrPrinting" class="screen">
+  <div class="body">
+    <div class="center">
+      <div class="spin"></div>
+      <h2 id="printingMsg">PRINTING…</h2>
+      <p class="lead">Please take your photo from the printer</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============ DONE ============ -->
+<section id="scrDone" class="screen">
+  <div class="body">
+    <div class="center">
+      <h1>THANK YOU</h1>
+      <div id="qrBox"><canvas id="qrCanvas"></canvas></div>
+      <p class="lead" id="doneLead">Scan the code to keep a digital copy</p>
+      <div class="row">
+        <button class="btn ghost" id="btnPrintAgain">Print again</button>
+        <button class="btn" id="btnFinish">Done</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="toast" id="toast"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<script src="assets/config.js"></script>
+<script src="assets/frames.js"></script>
+<script src="assets/imaging.js"></script>
+<script src="assets/printer.js"></script>
+<script src="assets/app.js"></script>
+</body>
+</html>
