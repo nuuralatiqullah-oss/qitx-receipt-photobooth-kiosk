@@ -5,7 +5,7 @@
 window.CONFIG = {
   /* ---- Branding ---- */
   BOOTH_NAME: "RECIEPT PHOTOBOOTH",
-  EVENT_NAME: "Walimatul Urus",
+  EVENT_NAME: "by @qitx_exclusive",
   TAGLINE: "SNAP IT & PRINT IT",
   FOOTER_LINE: "Follow us on instagram @qitx_exclusive",
 
