@@ -4,10 +4,10 @@
    ============================================================ */
 window.CONFIG = {
   /* ---- Branding ---- */
-  BOOTH_NAME: "NUURAL BOOTH",
+  BOOTH_NAME: "RECIEPT PHOTOBOOTH",
   EVENT_NAME: "Walimatul Urus",
-  TAGLINE: "Ambil gambar, terus cetak",
-  FOOTER_LINE: "Terima kasih kerana hadir",
+  TAGLINE: "SNAP IT & PRINT IT",
+  FOOTER_LINE: "Follow us on instagram @qitx_exclusive",
 
   /* ---- Supabase (leave blank to run fully offline) ----
      Get these from Supabase Dashboard -> Project Settings -> API  */
