@@ -106,6 +106,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 .btn.small{font-size:13px;padding:12px 20px;min-height:48px;box-shadow:3px 3px 0 var(--ink)}
 .btn.block{width:100%;max-width:430px}
 .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;width:100%;max-width:470px}
+.revacts{display:flex;flex-direction:column;gap:12px;align-items:center;width:100%}
 .row .btn{flex:1 1 150px}
 
 /* ---------- the paper strip (the hero) ---------- */
@@ -218,7 +219,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 /* ---------- review / done ---------- */
 .sheet{
   background:#fff;border:2.5px solid var(--ink);border-radius:8px;
-  max-height:52vh;width:auto;display:block;margin:0 auto 20px;
+  max-height:50vh;width:auto;display:block;margin:0 auto 20px;
   box-shadow:6px 6px 0 var(--ink);
 }
 #qrBox{background:#fff;border:2.5px solid var(--ink);border-radius:14px;padding:12px;display:none;margin:0 auto 18px;box-shadow:4px 4px 0 var(--ink)}
@@ -238,6 +239,15 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
   animation:sp 1s linear infinite;margin:0 auto 20px;
 }
 @keyframes sp{to{transform:rotate(360deg)}}
+
+/* Landscape: stand the finished strip next to its buttons rather than
+   stacking them, so the strip can use the full height. */
+@media (orientation:landscape){
+  #scrReview .center{flex-direction:row;gap:30px;align-items:center;justify-content:center}
+  #scrReview .sheet{max-height:78vh;margin:0}
+  #scrReview .revacts{display:flex;flex-direction:column;gap:12px;width:auto}
+  #scrReview .revacts .row{max-width:300px}
+}
 
 /* Portrait: strip beside the preview, button underneath. */
 @media (orientation:portrait){
@@ -327,13 +337,15 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
   <div class="body">
     <div class="center">
       <canvas id="previewCanvas" class="sheet"></canvas>
-      <div class="row">
-        <button class="btn alt" id="btnRetake">Retake</button>
-        <button class="btn go" id="btnPrint">Print it</button>
-      </div>
-      <div class="row" style="margin-top:12px">
-        <button class="btn alt small" id="btnTestCard">Settings test</button>
-        <button class="btn alt small" id="btnDiag">Printer diagnostic</button>
+      <div class="revacts">
+        <div class="row">
+          <button class="btn alt" id="btnRetake">Retake</button>
+          <button class="btn go" id="btnPrint">Print it</button>
+        </div>
+        <div class="row">
+          <button class="btn alt small" id="btnSave">Save</button>
+          <button class="btn blue small" id="btnShare">Share</button>
+        </div>
       </div>
     </div>
   </div>

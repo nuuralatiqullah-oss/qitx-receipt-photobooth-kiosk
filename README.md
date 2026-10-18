@@ -36,6 +36,36 @@ event** so the fonts and libraries are cached too.
 After you push a change, bump `CACHE` in `sw.js` — otherwise tablets
 keep serving the version they already have.
 
+## Two versions of every strip
+
+The booth makes each strip twice:
+
+- **The keepsake** — full colour, twice print size (~1150px wide). This
+  is what guests see on the review screen, and what Save, Share, the QR
+  download and the Admin photo list all use.
+- **The print** — black and white dots at 203 dpi, because that is all
+  a thermal head can put on paper.
+
+So the screen looks like a normal photo while the paper looks like a
+receipt. Both are kept on the tablet, so a reprint comes out identical
+to the original rather than being re-processed.
+
+To see exactly how a print will land before committing paper, use
+**Admin → Printer → Settings test**.
+
+## Getting photos to guests
+
+| Way | Good for | Needs |
+|---|---|---|
+| **QR code** | Guests, hands down — they scan and it opens on their own phone, no app, no typing | Supabase |
+| **Share** | Sending one strip from the tablet via WhatsApp or similar | Nothing |
+| **Save** | Keeping a copy on the tablet for later | Nothing |
+| **Admin → Photos** | Staff reprinting or sending a strip someone came back for | Nothing |
+
+The QR is the one worth setting up. Without Supabase the booth still
+captures, prints, saves and shares — guests just can't self-serve a
+digital copy.
+
 ## Framing: what you see is what prints
 
 The camera preview is set to the exact shape of the photo slot being
@@ -64,7 +94,7 @@ password you care about.
 | Layouts | Turn layouts on or off, add your own, delete yours |
 | Photos | Recent strips kept on the tablet — reprint, share, delete |
 | Camera | Front/rear, mirror, capture width, countdown, copies, idle reset |
-| Printer | Paper width, cut, dot size, dithering, print speed and density, Supabase |
+| Printer | Test prints, paper width, cut, dot size, dithering, speed and density, Supabase |
 
 Everything saves to the tablet and overrides `assets/config.js`. The
 booth picks changes up on its next load. **Reset all settings** on the

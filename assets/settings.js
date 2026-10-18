@@ -120,14 +120,15 @@
 
   /**
    * Save one printed sheet.
-   * @param {Blob} blob   the composed sheet as a PNG/JPEG
-   * @param {object} meta { frameId, frameName, remoteUrl }
+   * @param {Blob} blob   the colour keepsake, for showing and sharing
+   * @param {object} meta { printBlob, frameId, frameName, remoteUrl }
    */
   Settings.addPrint = function (blob, meta) {
     const rec = {
       id: String(Date.now()) + "-" + Math.random().toString(36).slice(2, 7),
       at: Date.now(),
-      blob: blob,
+      blob: blob,                               // colour keepsake
+      printBlob: (meta && meta.printBlob) || null,  // exact 1-bit print
       frameId: (meta && meta.frameId) || "",
       frameName: (meta && meta.frameName) || "",
       remoteUrl: (meta && meta.remoteUrl) || "",

@@ -267,9 +267,17 @@
       if (!img) return;
       const x = Math.round(s.x * k), y = Math.round(s.y * k);
       const w = Math.round(s.w * k), h = Math.round(s.h * k);
-      const done = Imaging.processPhoto(img, w, h, photoOpts);
-      ctx.imageSmoothingEnabled = false;
-      ctx.drawImage(done, x, y);
+      if (photoOpts.mode === "display") {
+        // The keepsake copy: the photo as the camera saw it, in colour.
+        // Only the print path gets turned into dots.
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        drawCover(ctx, img, x, y, w, h);
+      } else {
+        const done = Imaging.processPhoto(img, w, h, photoOpts);
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(done, x, y);
+      }
       ctx.strokeStyle = "#000000";
       ctx.lineWidth = Math.max(1, Math.round(2 * k));
       ctx.strokeRect(x, y, w, h);

@@ -67,6 +67,11 @@ window.CONFIG = {
   PHOTO_SHARPEN: 0.8,
   PHOTO_BLUR: 0,
 
+  /* The saved/shared copy is rendered this many times bigger than the
+     print, in colour. 2 gives a strip about 1150px wide, which looks
+     right on a phone without being a huge file. */
+  DISPLAY_SCALE: 2,
+
   /* ---- Camera (editable in Admin) ---- */
   CAMERA_FACING: "user",     // "user" (selfie) or "environment"
   MIRROR_PREVIEW: true,

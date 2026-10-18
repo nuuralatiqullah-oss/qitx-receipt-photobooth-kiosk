@@ -218,6 +218,26 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
     <!-- PRINTER -->
     <section class="panel" data-p="printer">
       <div class="box">
+        <h2>Test prints</h2>
+        <p class="note">Connect the printer, then use these to tune it on real paper before an event.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+          <button class="btn" id="btnConnect">Connect printer</button>
+          <span id="connState" style="font-size:13.5px;color:var(--ink-soft)">Not connected</span>
+        </div>
+        <div style="display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn alt sm" id="btnTestCard">Settings test</button>
+          <button class="btn alt sm" id="btnDiag">Printer diagnostic</button>
+          <button class="btn alt sm" id="btnTestSlip">Test slip</button>
+        </div>
+        <p class="note" style="margin:14px 0 0">
+          <b>Settings test</b> prints the same photo four ways, labelled A–D,
+          so you can pick the clearest and set Dot size to match.<br>
+          <b>Printer diagnostic</b> prints solid blacks and a density ladder.
+          Streaks in the same columns every time mean a dirty print head;
+          fading towards the bottom means it's running too hot.
+        </p>
+      </div>
+      <div class="box">
         <h2>Paper and cutting</h2>
         <label><span class="lb">Paper width</span>
           <select id="f_PRINT_WIDTH_DOTS">
@@ -290,6 +310,8 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
 <script src="assets/config.js"></script>
 <script src="assets/settings.js"></script>
 <script src="assets/frames.js"></script>
+<script src="assets/imaging.js"></script>
+<script src="assets/printer.js"></script>
 <script src="assets/admin.js"></script>
 <script>
 if ("serviceWorker" in navigator) {

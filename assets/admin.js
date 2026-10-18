@@ -346,6 +346,102 @@
     toast("Downloaded — share it from your gallery");
   }
 
+  /* ---------- printer tools ---------- */
+
+  function paintPrinter() {
+    const el = $("connState");
+    if (!el) return;
+    if (!window.Printer || !window.Printer.isSupported()) {
+      el.textContent = "This browser can't reach USB printers";
+      return;
+    }
+    const on = window.Printer.isConnected();
+    el.textContent = on ? "Connected" : "Not connected";
+    el.style.color = on ? "var(--jade)" : "var(--ink-soft)";
+    $("btnConnect").textContent = on ? "Reconnect" : "Connect printer";
+  }
+
+  function printOpts() {
+    const c = window.Settings.load();
+    return {
+      bandRows: c.RASTER_BAND_ROWS,
+      chunkBytes: c.USB_CHUNK_BYTES,
+      cutMode: c.CUT_MODE,
+      feedBeforeCut: c.FEED_BEFORE_CUT,
+      density: c.PRINT_DENSITY,
+      speed: c.PRINT_SPEED
+    };
+  }
+
+  function needPrinter() {
+    if (window.Printer && window.Printer.isConnected()) return true;
+    toast("Connect the printer first", true);
+    return false;
+  }
+
+  /* The settings test needs a real face, so pull one out of the newest
+     saved strip rather than making the operator shoot again here. */
+  async function newestPhoto() {
+    const rows = await window.Settings.listPrints();
+    if (!rows.length) return null;
+    const rec = rows[0];
+    const bmp = await createImageBitmap(rec.blob);
+
+    const frames = (window.BUILTIN_FRAMES || []).concat(window.Settings.customFrames());
+    const f = frames.filter(x => String(x.id) === String(rec.frameId))[0];
+    if (!f || !f.slots.length) return bmp;
+
+    const k = bmp.width / f.width;
+    const s = f.slots[0];
+    const c = document.createElement("canvas");
+    c.width = Math.round(s.w * k);
+    c.height = Math.round(s.h * k);
+    c.getContext("2d").drawImage(
+      bmp, s.x * k, s.y * k, s.w * k, s.h * k, 0, 0, c.width, c.height);
+    return c;
+  }
+
+  async function runSettingsTest(btn) {
+    if (!needPrinter()) return;
+    const cfg = window.Settings.load();
+    btn.disabled = true;
+    try {
+      const photo = await newestPhoto();
+      if (!photo) {
+        toast("Take a photo in the booth first — the test needs a real one", true);
+        return;
+      }
+      const card = window.Imaging.buildTestCard(photo, cfg.PRINT_WIDTH_DOTS, {
+        dither: cfg.DITHER, gamma: cfg.PHOTO_GAMMA, autoLevels: cfg.PHOTO_AUTO_LEVELS
+      });
+      await window.Printer.print(
+        window.Imaging.prepareForPrint(card, { dither: cfg.DITHER }), printOpts());
+      toast("Compare A to D, then set Dot size to match the best one");
+    } catch (e) {
+      toast("Test print failed: " + e.message, true);
+    } finally {
+      btn.disabled = false;
+      paintPrinter();
+    }
+  }
+
+  async function runDiagnostic(btn) {
+    if (!needPrinter()) return;
+    const cfg = window.Settings.load();
+    btn.disabled = true;
+    try {
+      const card = window.Imaging.buildDiagnostic(cfg.PRINT_WIDTH_DOTS);
+      await window.Printer.print(
+        window.Imaging.prepareForPrint(card, {}), printOpts());
+      toast("Check the black bars for streaks or fading");
+    } catch (e) {
+      toast("Diagnostic failed: " + e.message, true);
+    } finally {
+      btn.disabled = false;
+      paintPrinter();
+    }
+  }
+
   /* ---------- tabs ---------- */
 
   function showPanel(name) {
@@ -376,6 +472,32 @@
         toast("All strips deleted");
       });
     };
+    $("btnConnect").onclick = async function () {
+      try {
+        await window.Printer.connect();
+        toast("Printer connected");
+      } catch (e) {
+        toast(e.message || "Couldn't connect", true);
+      }
+      paintPrinter();
+    };
+    $("btnTestCard").onclick = function () { runSettingsTest(this); };
+    $("btnDiag").onclick = function () { runDiagnostic(this); };
+    $("btnTestSlip").onclick = async function () {
+      if (!needPrinter()) return;
+      try {
+        await window.Printer.printTest(printOpts());
+        toast("Test slip sent");
+      } catch (e) {
+        toast(e.message, true);
+      }
+    };
+    if (window.Printer) {
+      window.Printer.onStatus = paintPrinter;
+      window.Printer.reconnect().then(paintPrinter);
+    }
+    paintPrinter();
+
     $("btnResetAll").onclick = function () {
       if (!confirm("Put every setting back to its default?")) return;
       window.Settings.reset();

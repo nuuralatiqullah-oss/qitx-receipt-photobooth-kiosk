@@ -13,7 +13,8 @@
     frames: [],
     frame: null,
     shots: [],          // canvas per slot
-    sheet: null,        // composed canvas
+    sheet: null,        // composed canvas, print resolution
+    sheetDisplay: null, // colour keepsake shown, saved and shared
     prepared: null,     // 1-bit bitmap
     stream: null,
     facing: (window.CONFIG && window.CONFIG.CAMERA_FACING) || "user",
@@ -384,13 +385,27 @@
 
   async function buildSheet() {
     const overlay = await loadOverlay(state.frame);
-    state.sheet = window.Imaging.compose(state.frame, state.shots, {
-      width: CFG.PRINT_WIDTH_DOTS,
+    const text = {
       overlay: overlay,
       header: CFG.BOOTH_NAME,
       subheader: CFG.EVENT_NAME,
       footer: CFG.FOOTER_LINE,
-      stamp: stamp(new Date()),
+      stamp: stamp(new Date())
+    };
+
+    /* Two versions of the same strip.
+       - display: full colour at a few times print size. This is what
+         the guest sees, saves and shares.
+       - print: black and white dots, because that is all a thermal
+         head can put on paper. */
+    const scale = Math.max(1, CFG.DISPLAY_SCALE || 2);
+    state.sheetDisplay = window.Imaging.compose(state.frame, state.shots, Object.assign({}, text, {
+      width: CFG.PRINT_WIDTH_DOTS * scale,
+      photo: { mode: "display" }
+    }));
+
+    state.sheet = window.Imaging.compose(state.frame, state.shots, Object.assign({}, text, {
+      width: CFG.PRINT_WIDTH_DOTS,
       photo: {
         dotSize: CFG.PHOTO_DOT_SIZE,
         dither: CFG.DITHER,
@@ -400,81 +415,73 @@
         localContrast: CFG.PHOTO_LOCAL_CONTRAST,
         blurPasses: CFG.PHOTO_BLUR
       }
-    });
+    }));
+    state.prepared = window.Imaging.prepareForPrint(state.sheet, { dither: CFG.DITHER });
 
-    // Photos are already 1-bit, so this only thresholds text/borders.
-    state.prepared = window.Imaging.prepareForPrint(state.sheet, {
-      dither: CFG.DITHER
-    });
-
-    // Preview shows the real 1-bit result, so what you see is what prints.
-    const preview = window.Imaging.bitsToCanvas(state.prepared);
-    const target = $("previewCanvas");
-    target.width = preview.width;
-    target.height = preview.height;
-    target.getContext("2d").drawImage(preview, 0, 0);
+    showPreview(state.sheetDisplay);
   }
 
-  /* Prints the same shot at four settings, labelled A-D, so the
-     operator can pick the best one on real paper. */
-  async function printTestCard() {
-    if (!window.Printer.isConnected()) {
-      toast("Connect the printer first", true);
-      return;
-    }
-    if (!state.shots.length) {
-      toast("Take a photo first", true);
-      return;
-    }
-    show("scrPrinting");
-    $("printingMsg").textContent = "PRINTING TEST…";
-    try {
-      const card = window.Imaging.buildTestCard(state.shots[0], CFG.PRINT_WIDTH_DOTS, {
-        dither: CFG.DITHER,
-        gamma: CFG.PHOTO_GAMMA,
-        autoLevels: CFG.PHOTO_AUTO_LEVELS
-      });
-      const prep = window.Imaging.prepareForPrint(card, { dither: CFG.DITHER });
-      await window.Printer.print(prep, {
-        bandRows: CFG.RASTER_BAND_ROWS,
-        chunkBytes: CFG.USB_CHUNK_BYTES,
-        cutMode: CFG.CUT_MODE,
-        feedBeforeCut: CFG.FEED_BEFORE_CUT,
-        density: CFG.PRINT_DENSITY,
-        speed: CFG.PRINT_SPEED
-      });
-      toast("Compare A-D, then set PHOTO_DOT_SIZE in config.js");
-    } catch (e) {
-      toast("Test print failed: " + e.message, true);
-    }
-    show("scrReview");
+  function showPreview(src) {
+    const t = $("previewCanvas");
+    t.width = src.width;
+    t.height = src.height;
+    t.getContext("2d").drawImage(src, 0, 0);
   }
 
-  /* Prints known patterns to tell a printer fault apart from an
-     image-processing problem. */
-  async function printDiagnostic() {
-    if (!window.Printer.isConnected()) {
-      toast("Connect the printer first", true);
+  function stripFilename(ext) {
+    const d = new Date();
+    const p = v => String(v).padStart(2, "0");
+    const base = (CFG.BOOTH_NAME || "photobooth").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    return base + "-" + d.getFullYear() + p(d.getMonth() + 1) + p(d.getDate()) +
+           "-" + p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds()) + "." + ext;
+  }
+
+  function keepsake() {
+    return state.sheetDisplay || state.sheet;
+  }
+
+  async function saveStrip() {
+    const src = keepsake();
+    if (!src) return;
+    try {
+      const blob = await canvasToBlob(src, "image/jpeg", 0.92);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = stripFilename("jpg");
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      toast("Saved to this tablet");
+    } catch (e) {
+      toast("Couldn't save: " + e.message, true);
+    }
+  }
+
+  async function shareStrip() {
+    const src = keepsake();
+    if (!src) return;
+    let blob;
+    try {
+      blob = await canvasToBlob(src, "image/jpeg", 0.92);
+    } catch (e) {
+      toast("Couldn't prepare the photo", true);
       return;
     }
-    show("scrPrinting");
-    $("printingMsg").textContent = "PRINTING DIAGNOSTIC…";
-    try {
-      const card = window.Imaging.buildDiagnostic(CFG.PRINT_WIDTH_DOTS);
-      const prep = window.Imaging.prepareForPrint(card, {});
-      await window.Printer.print(prep, {
-        bandRows: CFG.RASTER_BAND_ROWS,
-        chunkBytes: CFG.USB_CHUNK_BYTES,
-        cutMode: CFG.CUT_MODE,
-        feedBeforeCut: CFG.FEED_BEFORE_CUT,
-        density: CFG.PRINT_DENSITY,
-        speed: CFG.PRINT_SPEED
-      });
-      toast("Check the black bars for streaks or fading");
-    } catch (e) {
-      toast("Diagnostic failed: " + e.message, true);
+    const file = new File([blob], stripFilename("jpg"), { type: "image/jpeg" });
+
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ files: [file], title: CFG.BOOTH_NAME || "Photobooth" });
+        return;
+      } catch (e) {
+        if (e && e.name === "AbortError") return;
+      }
     }
-    show("scrReview");
+    if (state.guestUrl) {
+      window.open(state.guestUrl, "_blank", "noopener");
+      return;
+    }
+    await saveStrip();
   }
 
   async function doPrint() {
@@ -510,15 +517,28 @@
     return new Promise(resolve => canvas.toBlob(resolve, type, quality));
   }
 
+  async function blobToCanvas(blob) {
+    const bmp = await createImageBitmap(blob);
+    const c = document.createElement("canvas");
+    c.width = bmp.width;
+    c.height = bmp.height;
+    c.getContext("2d").drawImage(bmp, 0, 0);
+    return c;
+  }
+
   /* Keep a copy on the tablet so Admin can reprint or share it later,
      with or without internet. Trimmed to KEEP_LOCAL_COPIES. */
   async function saveLocalCopy(remoteUrl) {
     if (!window.Settings || !state.sheet) return;
     if (!state.shots.length) return;   // a reprint is already saved
     try {
-      const blob = await canvasToBlob(state.sheet, "image/jpeg", 0.9);
+      const blob = await canvasToBlob(keepsake(), "image/jpeg", 0.9);
       if (!blob) return;
+      // keep the dot-for-dot version too, so a reprint is identical
+      const printBlob = await canvasToBlob(
+        window.Imaging.bitsToCanvas(state.prepared), "image/png");
       await window.Settings.addPrint(blob, {
+        printBlob: printBlob,
         frameId: String(state.frame.id),
         frameName: state.frame.name,
         remoteUrl: remoteUrl || ""
@@ -542,7 +562,7 @@
       const d = new Date();
       const path = d.toISOString().slice(0, 10) + "/" +
                    d.toISOString().slice(11, 19).replace(/:/g, "") + "-" + uid(4) + ".jpg";
-      const blob = await canvasToBlob(state.sheet, "image/jpeg", 0.92);
+      const blob = await canvasToBlob(keepsake(), "image/jpeg", 0.92);
 
       const up = await supabase.storage
         .from(CFG.PHOTO_BUCKET)
@@ -583,6 +603,7 @@
     state.shots = [];
     state.frame = null;
     state.sheet = null;
+    state.sheetDisplay = null;
     state.prepared = null;
     state.sessionId = uid(10);
     $("btnUseFrame").disabled = true;
@@ -632,8 +653,8 @@
       $("btnPrint").style.display = "none";
     }
     $("btnRetake").onclick = goCapture;
-    $("btnTestCard").onclick = printTestCard;
-    $("btnDiag").onclick = printDiagnostic;
+    $("btnSave").onclick = saveStrip;
+    $("btnShare").onclick = shareStrip;
     $("btnPrint").onclick = doPrint;
     $("btnPrintAgain").onclick = doPrint;
     $("btnFinish").onclick = hardReset;
@@ -666,21 +687,21 @@
     if (!rec) { toast("That strip is no longer saved", true); return false; }
 
     try {
-      const bmp = await createImageBitmap(rec.blob);
+      // the dot-for-dot copy when we have it, else the colour one
+      const bmp = await createImageBitmap(rec.printBlob || rec.blob);
       const c = document.createElement("canvas");
       c.width = bmp.width;
       c.height = bmp.height;
       c.getContext("2d").drawImage(bmp, 0, 0);
       state.sheet = c;
-      state.prepared = window.Imaging.prepareForPrint(c, { dither: CFG.DITHER });
+      state.sheetDisplay = null;
+      state.prepared = window.Imaging.prepareForPrint(c, {
+        dither: CFG.DITHER,
+        ditherSheet: !rec.printBlob   // a colour fallback still needs dithering
+      });
       state.frame = { id: rec.frameId || "reprint", name: rec.frameName || "Reprint", shots: 0, slots: [] };
 
-      const preview = window.Imaging.bitsToCanvas(state.prepared);
-      const t = $("previewCanvas");
-      t.width = preview.width;
-      t.height = preview.height;
-      t.getContext("2d").drawImage(preview, 0, 0);
-
+      showPreview(rec.blob ? await blobToCanvas(rec.blob) : window.Imaging.bitsToCanvas(state.prepared));
       show("scrReview");
       toast("Reprint ready — tap Print it");
       return true;
