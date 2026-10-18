@@ -520,3 +520,92 @@
 
   window.Imaging = Imaging;
 })();
+
+/* ============================================================
+   TEMPLATE SLOT DETECTION
+   A photobooth template is a PNG with holes punched where the
+   photos go. This finds those holes by looking for connected
+   see-through regions, so an operator can upload artwork without
+   typing any coordinates.
+   ============================================================ */
+(function () {
+  "use strict";
+
+  /**
+   * @param {HTMLImageElement|ImageBitmap} img  the template
+   * @param {number} targetW  print width in dots (576 or 384)
+   * @returns {{width,height,slots,coverage}} slots in print dots,
+   *          ordered top to bottom then left to right
+   */
+  window.Imaging.detectSlots = function (img, targetW) {
+    const W = targetW || 576;
+    // Work small: detection doesn't need full resolution and a big
+    // template would otherwise take seconds to flood fill.
+    const dw = 320;
+    const dh = Math.max(1, Math.round(img.height / img.width * dw));
+
+    const c = document.createElement("canvas");
+    c.width = dw;
+    c.height = dh;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    ctx.clearRect(0, 0, dw, dh);
+    ctx.drawImage(img, 0, 0, dw, dh);
+    const data = ctx.getImageData(0, 0, dw, dh).data;
+
+    const clear = new Uint8Array(dw * dh);
+    let clearCount = 0;
+    for (let i = 0; i < dw * dh; i++) {
+      if (data[i * 4 + 3] < 40) { clear[i] = 1; clearCount++; }
+    }
+
+    const out = { width: W, height: Math.round(img.height / img.width * W), slots: [],
+                  coverage: clearCount / (dw * dh) };
+    if (!clearCount) return out;
+
+    // flood fill each see-through region, keep its bounding box
+    const seen = new Uint8Array(dw * dh);
+    const stack = new Int32Array(dw * dh);
+    const boxes = [];
+    const minArea = dw * dh * 0.012;
+
+    for (let start = 0; start < dw * dh; start++) {
+      if (!clear[start] || seen[start]) continue;
+      let sp = 0;
+      stack[sp++] = start;
+      seen[start] = 1;
+      let x0 = dw, y0 = dh, x1 = -1, y1 = -1, area = 0;
+
+      while (sp > 0) {
+        const p = stack[--sp];
+        const x = p % dw, y = (p / dw) | 0;
+        area++;
+        if (x < x0) x0 = x;
+        if (x > x1) x1 = x;
+        if (y < y0) y0 = y;
+        if (y > y1) y1 = y;
+        if (x > 0 && clear[p - 1] && !seen[p - 1]) { seen[p - 1] = 1; stack[sp++] = p - 1; }
+        if (x < dw - 1 && clear[p + 1] && !seen[p + 1]) { seen[p + 1] = 1; stack[sp++] = p + 1; }
+        if (y > 0 && clear[p - dw] && !seen[p - dw]) { seen[p - dw] = 1; stack[sp++] = p - dw; }
+        if (y < dh - 1 && clear[p + dw] && !seen[p + dw]) { seen[p + dw] = 1; stack[sp++] = p + dw; }
+      }
+
+      const bw = x1 - x0 + 1, bh = y1 - y0 + 1;
+      // Ignore specks, hairline gaps, and any region that is mostly
+      // empty space inside its own box (a ragged cut-out, not a slot).
+      if (area < minArea || bw < 16 || bh < 16) continue;
+      if (area / (bw * bh) < 0.6) continue;
+      boxes.push({ x: x0, y: y0, w: bw, h: bh });
+    }
+
+    boxes.sort((a, b) => (Math.abs(a.y - b.y) > 8 ? a.y - b.y : a.x - b.x));
+
+    const k = W / dw;
+    out.slots = boxes.map(b => ({
+      x: Math.round(b.x * k),
+      y: Math.round(b.y * k),
+      w: Math.round(b.w * k),
+      h: Math.round(b.h * k)
+    }));
+    return out;
+  };
+})();

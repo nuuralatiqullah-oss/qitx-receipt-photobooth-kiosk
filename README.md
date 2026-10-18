@@ -53,6 +53,28 @@ to the original rather than being re-processed.
 To see exactly how a print will land before committing paper, use
 **Admin → Printer → Settings test**.
 
+## Uploading your own template
+
+**Admin → Layouts → Upload a template.** Pick a PNG with see-through
+holes where the photos go. The holes are found automatically — there
+are no coordinates to type — and the preview outlines each one in pink
+so you can check before saving.
+
+Designing one:
+
+- **576 px wide** matches the paper exactly (any width is scaled to fit).
+- Punch the photo areas out to **full transparency**. A flat JPEG has no
+  holes, and the uploader will say so rather than failing quietly.
+- Each hole should be a clean rectangle. Specks and hairline gaps are
+  ignored; a ragged cut-out may not be recognised.
+- Put your own wording in the artwork — an uploaded template replaces
+  the built-in booth name and footer.
+- Design for the printer: **no grey, no colour, 203 dpi.** Bold shapes,
+  heavy type and plenty of white. Fine detail and dark fills turn to mush.
+
+Templates are stored on the tablet, so they work offline, and they are
+deleted along with the layout.
+
 ## Getting photos to guests
 
 | Way | Good for | Needs |
@@ -65,6 +87,24 @@ To see exactly how a print will land before committing paper, use
 The QR is the one worth setting up. Without Supabase the booth still
 captures, prints, saves and shares — guests just can't self-serve a
 digital copy.
+
+### Turning the QR on
+
+1. In your Supabase project, **SQL Editor** → paste all of
+   `supabase-setup.sql` → Run. Safe to re-run.
+2. **Project Settings → Data API** → copy the Project URL.
+   **Project Settings → API Keys** → copy the **publishable** key
+   (`sb_publishable_…`). Never the secret one — this is a public repo.
+3. **Admin → Printer → Supabase** → paste both → **Save** →
+   **Test connection**.
+
+The test walks the same path the booth takes when it prints: it uploads
+a file, reads it back over the public URL, writes a row to `prints`,
+then cleans up after itself. If a step fails it names that step, so you
+know whether to re-run the SQL or make the bucket public.
+
+Then on the **Camera** tab make sure **Upload to Supabase** and
+**Show a QR code** are both on.
 
 ## Framing: what you see is what prints
 

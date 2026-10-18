@@ -181,6 +181,15 @@
   }
 
   async function loadOverlay(frame) {
+    // artwork uploaded through Admin and kept on this tablet
+    if (frame.overlayLocal && window.Settings) {
+      try {
+        const blob = await window.Settings.getTemplate(frame.overlayLocal);
+        if (blob) return await createImageBitmap(blob);
+      } catch (e) {
+        console.warn("Local template failed:", e.message);
+      }
+    }
     if (!frame.overlayPath || !supabase) return null;
     try {
       const { data } = supabase.storage.from(CFG.FRAME_BUCKET).getPublicUrl(frame.overlayPath);
@@ -598,6 +607,13 @@
 
   /* ---------------- navigation ---------------- */
 
+  /* Leaving the review screen throws the photos away, so make sure
+     that is what they meant. */
+  function confirmHome() {
+    if (state.shots.length && !confirm("Go back to the start? This strip won't be saved.")) return;
+    hardReset();
+  }
+
   function hardReset() {
     stopCamera();
     state.shots = [];
@@ -658,6 +674,8 @@
     $("btnPrint").onclick = doPrint;
     $("btnPrintAgain").onclick = doPrint;
     $("btnFinish").onclick = hardReset;
+    $("btnReviewHome").onclick = confirmHome;
+    $("btnDoneHome").onclick = hardReset;
 
     // Keep the screen awake while the booth is running.
     if ("wakeLock" in navigator) {

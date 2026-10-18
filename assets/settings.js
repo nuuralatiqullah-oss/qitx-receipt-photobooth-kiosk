@@ -16,6 +16,7 @@
   const KEY = "kiosk.settings.v1";
   const DB_NAME = "kiosk-photos";
   const STORE = "prints";
+  const TPL = "templates";
 
   const Settings = {};
 
@@ -89,16 +90,35 @@
     return builtin.concat(custom).filter(f => hidden.indexOf(f.id) === -1);
   };
 
+  /* ---------- uploaded template artwork ---------- */
+
+  /** Store a template PNG. Kept in IndexedDB — far too big for localStorage. */
+  Settings.saveTemplate = function (id, blob) {
+    return tx("readwrite", s => { s.put({ id: id, blob: blob }); }, TPL);
+  };
+
+  Settings.getTemplate = function (id) {
+    return tx("readonly", s => ({ __req: s.get(id) }), TPL)
+      .then(rec => (rec ? rec.blob : null));
+  };
+
+  Settings.deleteTemplate = function (id) {
+    return tx("readwrite", s => { s.delete(id); }, TPL);
+  };
+
   /* ---------- recent prints (IndexedDB) ---------- */
 
   function openDb() {
     return new Promise(function (resolve, reject) {
       if (!window.indexedDB) return reject(new Error("No IndexedDB"));
-      const req = indexedDB.open(DB_NAME, 1);
+      const req = indexedDB.open(DB_NAME, 2);
       req.onupgradeneeded = function () {
         const db = req.result;
         if (!db.objectStoreNames.contains(STORE)) {
           db.createObjectStore(STORE, { keyPath: "id" });
+        }
+        if (!db.objectStoreNames.contains(TPL)) {
+          db.createObjectStore(TPL, { keyPath: "id" });
         }
       };
       req.onsuccess = () => resolve(req.result);
@@ -106,10 +126,11 @@
     });
   }
 
-  function tx(mode, fn) {
+  function tx(mode, fn, which) {
+    const name = which || STORE;
     return openDb().then(db => new Promise(function (resolve, reject) {
-      const t = db.transaction(STORE, mode);
-      const store = t.objectStore(STORE);
+      const t = db.transaction(name, mode);
+      const store = t.objectStore(name);
       let result;
       try { result = fn(store); } catch (e) { return reject(e); }
       t.oncomplete = () => resolve(result && result.__req ? result.__req.result : result);

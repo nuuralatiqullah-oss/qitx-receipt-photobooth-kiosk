@@ -127,6 +127,16 @@
       c.fillRect(s.x * sc, s.y * sc, s.w * sc, s.h * sc);
       c.strokeRect(s.x * sc, s.y * sc, s.w * sc, s.h * sc);
     });
+
+    // uploaded artwork sits on top of the slot boxes
+    if (frame.overlayLocal) {
+      window.Settings.getTemplate(frame.overlayLocal).then(function (blob) {
+        if (!blob) return;
+        return createImageBitmap(blob).then(function (bmp) {
+          c.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+        });
+      }).catch(function () {});
+    }
   }
 
   function renderTemplates() {
@@ -150,7 +160,8 @@
       const mm = Math.round(Math.max.apply(null, f.slots.map(s => s.w)) / 203 * 25.4);
       meta.innerHTML = '<div class="nm"></div><div class="sub">' +
         f.shots + ' photo' + (f.shots > 1 ? 's' : '') + ' · ' + mm + 'mm wide' +
-        (isCustom ? ' · <span class="pill">yours</span>' : '') + '</div>';
+        (f.overlayLocal ? ' · <span class="pill">template</span>'
+                        : isCustom ? ' · <span class="pill">yours</span>' : '') + '</div>';
       meta.querySelector(".nm").textContent = f.name;
 
       const acts = document.createElement("div");
@@ -176,6 +187,9 @@
         del.onclick = function () {
           if (!confirm('Delete the layout "' + f.name + '"?')) return;
           window.Settings.saveCustomFrames(custom.filter(c => c.id !== f.id));
+          if (f.overlayLocal) {
+            window.Settings.deleteTemplate(f.overlayLocal).catch(() => {});
+          }
           renderTemplates();
           toast("Layout deleted");
         };
@@ -219,7 +233,7 @@
     };
   }
 
-  function addTemplate() {
+  function addPlainLayout() {
     const name = $("t_name").value.trim();
     if (!name) { toast("Give the layout a name", true); return; }
     const shots = parseInt($("t_shots").value, 10);
@@ -234,6 +248,104 @@
     } else {
       toast("Couldn't save the layout", true);
     }
+  }
+
+  /* ---------- uploaded templates ---------- */
+
+  let pending = null;   // { blob, detected, img }
+
+  async function inspectTemplate(file) {
+    const report = $("u_report");
+    const text = $("u_text");
+    const btn = $("btnAddTemplate");
+    pending = null;
+    btn.disabled = true;
+
+    if (!file) { report.style.display = "none"; return; }
+
+    const cfg = window.Settings.load();
+    let bmp;
+    try {
+      bmp = await createImageBitmap(file);
+    } catch (e) {
+      report.style.display = "block";
+      text.innerHTML = "That file couldn't be opened as an image.";
+      return;
+    }
+
+    const found = window.Imaging.detectSlots(bmp, cfg.PRINT_WIDTH_DOTS || 576);
+
+    // preview: the artwork over a checkerboard so holes are obvious
+    const cv = $("u_prev");
+    const pw = 150, ph = Math.round(bmp.height / bmp.width * pw);
+    cv.width = pw; cv.height = ph;
+    const c = cv.getContext("2d");
+    c.clearRect(0, 0, pw, ph);
+    c.drawImage(bmp, 0, 0, pw, ph);
+    c.strokeStyle = "#ff4d6d";
+    c.lineWidth = 2;
+    const k = pw / found.width;
+    found.slots.forEach(sl => c.strokeRect(sl.x * k, sl.y * k, sl.w * k, sl.h * k));
+
+    report.style.display = "block";
+
+    if (!found.slots.length) {
+      text.innerHTML = found.coverage < 0.001
+        ? "<b>No see-through areas found.</b> This looks like a flat image. " +
+          "Punch holes where the photos go and export as PNG with transparency."
+        : "<b>Found transparency, but no usable photo holes.</b> They may be " +
+          "too small or an odd shape. Each hole should be a clear rectangle.";
+      return;
+    }
+
+    const mm = s => Math.round(s / 203 * 25.4);
+    const rows = found.slots.map((sl, i) =>
+      (i + 1) + ". " + mm(sl.w) + " x " + mm(sl.h) + "mm").join("<br>");
+    text.innerHTML = "<b>" + found.slots.length + " photo " +
+      (found.slots.length === 1 ? "slot" : "slots") + " found</b><br>" +
+      "Strip " + mm(found.width) + "mm wide, " + mm(found.height) + "mm long<br>" +
+      "<span style=\"color:var(--ink-soft)\">" + rows + "</span>";
+
+    pending = { blob: file, detected: found };
+    btn.disabled = false;
+  }
+
+  async function addTemplate() {
+    if (!pending) return;
+    const name = $("u_name").value.trim() || ($("u_file").files[0] || {}).name || "Template";
+    const id = "t" + Date.now().toString(36);
+    const d = pending.detected;
+
+    try {
+      await window.Settings.saveTemplate(id, pending.blob);
+    } catch (e) {
+      toast("Couldn't store the template: " + e.message, true);
+      return;
+    }
+
+    const frame = {
+      id: id,
+      name: name.replace(/\.(png|webp)$/i, ""),
+      width: d.width,
+      height: d.height,
+      shots: d.slots.length,
+      header: false,          // the artwork supplies its own wording
+      slots: d.slots,
+      overlayLocal: id
+    };
+    const list = window.Settings.customFrames();
+    list.push(frame);
+    if (!window.Settings.saveCustomFrames(list)) {
+      toast("Couldn't save the layout", true);
+      return;
+    }
+    $("u_name").value = "";
+    $("u_file").value = "";
+    $("u_report").style.display = "none";
+    $("btnAddTemplate").disabled = true;
+    pending = null;
+    renderTemplates();
+    toast('Added "' + frame.name + '" with ' + frame.shots + ' photo slots');
   }
 
   /* ---------- photos ---------- */
@@ -442,6 +554,76 @@
     }
   }
 
+  /* ---------- Supabase check ----------
+     Walks the same path the booth takes at print time: create a
+     client, upload a tiny file, read its public URL, insert a row.
+     Each step reports on its own so a failure says what to fix. */
+
+  async function testSupabase(btn) {
+    const el = $("supaState");
+    const cfg = window.Settings.load();
+    const url = String(cfg.SUPABASE_URL || "").trim();
+    const key = String(cfg.SUPABASE_ANON_KEY || "").trim();
+
+    const say = (msg, ok) => {
+      el.textContent = msg;
+      el.style.color = ok ? "var(--jade)" : "var(--punch)";
+    };
+
+    if (!url || !key) { say("Fill in both fields and Save first", false); return; }
+    if (!/^https:\/\/.+\.supabase\.co/.test(url)) {
+      say("That URL doesn't look like a Supabase project URL", false); return;
+    }
+    if (/^sb_secret_|^service_role/.test(key)) {
+      say("That's the secret key — use the publishable one", false); return;
+    }
+    if (!window.supabase) { say("Supabase library didn't load — check the internet", false); return; }
+
+    btn.disabled = true;
+    say("Testing…", true);
+    try {
+      const sb = window.supabase.createClient(url, key, {
+        auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
+      });
+
+      const path = "_connftest/" + Date.now() + ".txt";
+      const up = await sb.storage.from(cfg.PHOTO_BUCKET)
+        .upload(path, new Blob(["ok"], { type: "text/plain" }), { contentType: "text/plain" });
+      if (up.error) {
+        say('Upload failed: ' + up.error.message + ' — run supabase-setup.sql', false);
+        return;
+      }
+
+      const pub = sb.storage.from(cfg.PHOTO_BUCKET).getPublicUrl(path);
+      const publicUrl = pub && pub.data && pub.data.publicUrl;
+      if (!publicUrl) { say("No public URL — is the bucket public?", false); return; }
+
+      const reach = await fetch(publicUrl, { method: "GET", cache: "no-store" })
+        .then(r => r.ok).catch(() => false);
+
+      const ins = await sb.from("prints").insert({
+        session_id: "conn-test", frame_id: "test", storage_path: path, copies: 0
+      });
+
+      await sb.storage.from(cfg.PHOTO_BUCKET).remove([path]).catch(() => {});
+
+      if (ins.error) {
+        say("Storage works, but the prints table doesn't: " + ins.error.message, false);
+        return;
+      }
+      if (!reach) {
+        say("Uploads work but the file isn't publicly readable — make the bucket public", false);
+        return;
+      }
+      say("All good — guests will get a QR code", true);
+      toast("Supabase is connected. Turn on Upload and Show QR in Camera.");
+    } catch (e) {
+      say("Couldn't reach Supabase: " + (e.message || "network error"), false);
+    } finally {
+      btn.disabled = false;
+    }
+  }
+
   /* ---------- tabs ---------- */
 
   function showPanel(name) {
@@ -463,7 +645,9 @@
 
     $("btnSave").onclick = save;
     $("btnKiosk").onclick = () => { location.href = "index.html"; };
-    $("btnAddTpl").onclick = addTemplate;
+    $("btnAddTpl").onclick = addPlainLayout;
+    $("u_file").onchange = function () { inspectTemplate(this.files[0]); };
+    $("btnAddTemplate").onclick = addTemplate;
     $("btnRefresh").onclick = renderPhotos;
     $("btnClearPhotos").onclick = function () {
       if (!confirm("Delete every strip saved on this tablet?")) return;
@@ -481,6 +665,7 @@
       }
       paintPrinter();
     };
+    $("btnTestSupa").onclick = function () { testSupabase(this); };
     $("btnTestCard").onclick = function () { runSettingsTest(this); };
     $("btnDiag").onclick = function () { runDiagnostic(this); };
     $("btnTestSlip").onclick = async function () {
