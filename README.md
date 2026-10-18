@@ -29,6 +29,12 @@ Open the booth in Chrome, then **menu → Add to Home screen**. It installs
 as a fullscreen app with no address bar. Turn on Android **screen
 pinning** as well so guests can't leave the page.
 
+**Stuck in portrait?** The manifest sets the orientation at install
+time, so an app installed from an older build keeps whatever it had.
+Set it in **Admin → Camera → Screen** — that applies immediately with
+no reinstall. To clear it properly, uninstall the app from the home
+screen and add it again.
+
 Once installed it keeps working with no internet: the app shell is
 cached by a service worker. **Open it once while online before the
 event** so the fonts and libraries are cached too.
@@ -133,7 +139,7 @@ password you care about.
 | Text | Booth name, event name, welcome line, printed footer, PIN |
 | Layouts | Turn layouts on or off, add your own, delete yours |
 | Photos | Recent strips kept on the tablet — reprint, share, delete |
-| Camera | Front/rear, mirror, capture width, countdown, copies, idle reset |
+| Camera | Screen orientation, front/rear, mirror, capture width, countdown, copies, idle reset |
 | Printer | Test prints, paper width, cut, dot size, dithering, speed and density, Supabase |
 
 Everything saves to the tablet and overrides `assets/config.js`. The

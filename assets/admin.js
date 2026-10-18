@@ -14,7 +14,7 @@
     BOOTH_NAME: "text", EVENT_NAME: "text", TAGLINE: "text",
     START_LABEL: "text", FOOTER_LINE: "text", ADMIN_PIN: "text",
     SUPABASE_URL: "text", SUPABASE_ANON_KEY: "text",
-    CAMERA_FACING: "text", DITHER: "text", CUT_MODE: "text",
+    CAMERA_FACING: "text", DITHER: "text", CUT_MODE: "text", ORIENTATION: "text",
     PRINT_WIDTH_DOTS: "int", FEED_BEFORE_CUT: "int",
     PHOTO_DOT_SIZE: "int", COUNTDOWN_SECONDS: "int",
     AUTO_PRINT_COPIES: "int", IDLE_RESET_SECONDS: "int",
@@ -105,6 +105,7 @@
       return;
     }
     if (window.Settings.save(got.values)) {
+      window.Settings.applyOrientation();
       toast("Saved. The booth picks this up on its next load.");
     } else {
       toast("Couldn't save — the tablet may be blocking storage", true);
@@ -636,6 +637,7 @@
   /* ---------- boot ---------- */
 
   function start() {
+    if (window.Settings) window.Settings.applyOrientation();
     fill();
     renderTemplates();
 

@@ -72,6 +72,12 @@ window.CONFIG = {
      right on a phone without being a huge file. */
   DISPLAY_SCALE: 2,
 
+  /* Screen orientation once installed as an app.
+     "any" follows the tablet. "landscape" or "portrait" pin it, which
+     is what you want on a kiosk so guests can't rotate it mid-session.
+     Applied at runtime, so it takes effect without reinstalling. */
+  ORIENTATION: "any",
+
   /* ---- Camera (editable in Admin) ---- */
   CAMERA_FACING: "user",     // "user" (selfie) or "environment"
   MIRROR_PREVIEW: true,

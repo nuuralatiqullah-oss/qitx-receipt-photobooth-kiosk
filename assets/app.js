@@ -731,6 +731,7 @@
 
   async function boot() {
     state.sessionId = uid(10);
+    if (window.Settings) window.Settings.applyOrientation();
     wire();
 
     if (CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase) {

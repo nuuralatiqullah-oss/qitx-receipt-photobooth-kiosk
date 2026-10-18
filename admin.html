@@ -205,6 +205,17 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
     <!-- CAMERA -->
     <section class="panel" data-p="camera">
       <div class="box">
+        <h2>Screen</h2>
+        <p class="note">Pin the rotation so guests can't turn the booth sideways mid-session. Applies as soon as you save.</p>
+        <label><span class="lb">Orientation</span>
+          <select id="f_ORIENTATION">
+            <option value="any">Follow the tablet</option>
+            <option value="landscape">Landscape only</option>
+            <option value="portrait">Portrait only</option>
+          </select>
+          <span class="hint">Only works once the booth is installed to the home screen. In a normal browser tab Android decides.</span></label>
+      </div>
+      <div class="box">
         <h2>Camera</h2>
         <p class="note">Changes apply next time the booth screen loads.</p>
         <label><span class="lb">Which camera</span>

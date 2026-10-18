@@ -199,5 +199,29 @@
     });
   };
 
+  /**
+   * Pin or release the screen rotation. The manifest only sets a
+   * default at install time, so an installed app keeps whatever it was
+   * installed with — doing it here means a change in Admin applies
+   * straight away, with no reinstall.
+   * Quietly does nothing where the browser won't allow it (a normal
+   * tab, or desktop).
+   */
+  Settings.applyOrientation = function () {
+    const want = Settings.load().ORIENTATION || "any";
+    const so = window.screen && window.screen.orientation;
+    if (!so) return;
+    try {
+      if (want === "any") {
+        if (so.unlock) so.unlock();
+      } else if (so.lock) {
+        const p = so.lock(want);
+        if (p && p.catch) p.catch(function () {});
+      }
+    } catch (e) {
+      /* not permitted outside an installed app — fine */
+    }
+  };
+
   window.Settings = Settings;
 })();
