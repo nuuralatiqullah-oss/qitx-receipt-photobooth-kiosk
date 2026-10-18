@@ -36,6 +36,21 @@ event** so the fonts and libraries are cached too.
 After you push a change, bump `CACHE` in `sw.js` — otherwise tablets
 keep serving the version they already have.
 
+## Framing: what you see is what prints
+
+The camera preview is set to the exact shape of the photo slot being
+filled, and the capture is cropped to that same shape. A guest framing
+themselves in the preview gets precisely that on paper — nothing is
+trimmed afterwards.
+
+Because slots in one layout can differ (Big Duo has a square and a
+4:3), the preview changes shape between shots. The little strip beside
+it shows which slot is being filled and what is already in the others.
+
+In landscape the strip sits to the left of the preview with the button
+on the right; in portrait they stack. Both are tested at the Redmi Pad
+2's resolution.
+
 ## Admin
 
 Tap **Admin** on the welcome screen. Default PIN is `1234`; change it on

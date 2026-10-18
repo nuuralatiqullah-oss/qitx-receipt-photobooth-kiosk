@@ -223,22 +223,39 @@
     }
   }
 
-  function toCanvas(source, w, h) {
+  /** Aspect ratio (w/h) of the slot the next photo goes into. */
+  function slotAspect(i) {
+    if (!state.frame || !state.frame.slots.length) return 4 / 3;
+    const s = state.frame.slots[Math.min(i, state.frame.slots.length - 1)];
+    return s.w / s.h;
+  }
+
+  /**
+   * Centre-crop a frame to the slot's shape. The preview box is set to
+   * the same shape, so the guest is framing the real thing instead of a
+   * wider view that gets trimmed at print time.
+   */
+  function toCanvas(source, sw, sh, aspect) {
+    let cw = sw, ch = sh;
+    if (aspect) {
+      if (sw / sh > aspect) cw = Math.round(sh * aspect);
+      else ch = Math.round(sw / aspect);
+    }
     const c = document.createElement("canvas");
-    c.width = w;
-    c.height = h;
+    c.width = cw;
+    c.height = ch;
     const ctx = c.getContext("2d");
     if (CFG.MIRROR_PREVIEW && state.facing === "user") {
-      ctx.translate(w, 0);
+      ctx.translate(cw, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(source, 0, 0, w, h);
+    ctx.drawImage(source, (sw - cw) / 2, (sh - ch) / 2, cw, ch, 0, 0, cw, ch);
     return c;
   }
 
   function grabFrame() {
     const v = $("video");
-    return toCanvas(v, v.videoWidth, v.videoHeight);
+    return toCanvas(v, v.videoWidth, v.videoHeight, slotAspect(state.shots.length));
   }
 
   /* The video preview is often capped well below the sensor's real
@@ -251,13 +268,49 @@
         const shot = await new window.ImageCapture(track).takePhoto();
         const bmp = await createImageBitmap(shot);
         if (bmp.width >= $("video").videoWidth) {
-          return toCanvas(bmp, bmp.width, bmp.height);
+          return toCanvas(bmp, bmp.width, bmp.height, slotAspect(state.shots.length));
         }
       } catch (e) {
         /* not supported on this device — use the preview frame */
       }
     }
     return grabFrame();
+  }
+
+  /** Point the preview box at the slot being filled right now. */
+  function applySlotShape() {
+    const i = Math.min(state.shots.length, state.frame.slots.length - 1);
+    $("stage").style.setProperty("--slot-ar", String(slotAspect(i)));
+  }
+
+  /** Little strip showing filled slots and the one being shot. */
+  function paintMiniStrip() {
+    const el = $("miniStrip");
+    const f = state.frame;
+    if (!f || !f.slots.length) { el.hidden = true; return; }
+    el.hidden = false;
+    el.innerHTML = "";
+
+    const head = document.createElement("b");
+    head.textContent = CFG.BOOTH_NAME || "";
+    el.appendChild(head);
+
+    const inner = 74 - 12 - 5;   // box width minus padding and borders
+    const k = inner / f.width;
+    f.slots.forEach(function (s, i) {
+      const cell = document.createElement("s");
+      cell.style.width = Math.round(s.w * k) + "px";
+      cell.style.height = Math.round(s.h * k) + "px";
+      cell.style.alignSelf = "center";
+      if (state.shots[i]) {
+        const img = document.createElement("img");
+        img.src = state.shots[i].toDataURL("image/jpeg", 0.5);
+        cell.appendChild(img);
+      } else if (i === state.shots.length) {
+        cell.className = "now";
+      }
+      el.appendChild(cell);
+    });
   }
 
   function paintShots() {
@@ -275,6 +328,8 @@
     }
     $("captureCount").textContent =
       Math.min(state.shots.length + 1, state.frame.shots) + " / " + state.frame.shots;
+    applySlotShape();
+    paintMiniStrip();
   }
 
   function countdown(seconds) {
