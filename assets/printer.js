@@ -19,9 +19,19 @@
     { vendorId: 0x0519 }, // Star
     { vendorId: 0x0416 }, // Winbond (generic POS clones)
     { vendorId: 0x0483 }, // STMicro (generic POS clones)
+    { vendorId: 0x1a86 }, // QinHeng  (Gainscha / Gprinter and many clones)
+    { vendorId: 0x28e9 }, // GigaDevice (ditto)
+    { vendorId: 0x1fc9 }, // NXP
+    { vendorId: 0x0471 }, // Philips/generic
     { vendorId: 0x6868 }, // common no-name 58mm
     { vendorId: 0x0fe6 }  // ICS Advent / generic
   ];
+
+  /* Set once the filtered chooser came up empty, so the next tap shows
+     every USB device. Needed for printers whose vendor ID is not in the
+     list above — plenty of Gainscha/Gprinter units report an
+     unpublished ID. */
+  let showAllDevices = false;
 
   const Printer = {
     device: null,
@@ -78,13 +88,28 @@
     Printer.endpoint = endpointNumber;
   }
 
-  /** Show the USB chooser. Must be called from a real user tap. */
+  /** Show the USB chooser. Must be called from a real user tap.
+      requestDevice() needs the user gesture, and awaiting a retry would
+      lose it, so an empty list arms showAllDevices for the next tap
+      instead of retrying inline. */
   Printer.connect = async function () {
     if (!Printer.isSupported()) throw new Error("This browser has no WebUSB. Use Chrome or Edge.");
-    const device = await navigator.usb.requestDevice({ filters: VENDOR_FILTERS });
-    await claim(device);
-    status("connected", device.productName || "Printer");
-    return Printer.device;
+    try {
+      const opts = showAllDevices
+        ? { acceptAllDevices: true }
+        : { filters: VENDOR_FILTERS };
+      const device = await navigator.usb.requestDevice(opts);
+      await claim(device);
+      showAllDevices = false;
+      status("connected", device.productName || "Printer");
+      return Printer.device;
+    } catch (e) {
+      if (!showAllDevices && e && e.name === "NotFoundError") {
+        showAllDevices = true;
+        throw new Error("No matching printer listed. Tap Printer again to show every USB device, then pick yours.");
+      }
+      throw e;
+    }
   };
 
   /** Silent reconnect for devices already permitted (page reload, kiosk restart). */
@@ -148,6 +173,21 @@
     const parts = [];
 
     parts.push(new Uint8Array([ESC, 0x40]));           // ESC @  initialise
+
+    /* GS ( K  pL pH fn m   printer function settings.
+       fn=49 print density, fn=50 print speed.
+       Density m: 0 = standard, 1..127 darker, 128..255 paler.
+       Speed   m: lower = slower. Slower gives each dot more dwell
+       time, which is what dense black areas need.
+       Exact accepted values vary by model; an unsupported value is
+       ignored by the printer rather than breaking the job. */
+    if (cfg.density != null) {
+      parts.push(new Uint8Array([GS, 0x28, 0x4b, 0x02, 0x00, 49, cfg.density & 0xff]));
+    }
+    if (cfg.speed != null) {
+      parts.push(new Uint8Array([GS, 0x28, 0x4b, 0x02, 0x00, 50, cfg.speed & 0xff]));
+    }
+
     parts.push(new Uint8Array([ESC, 0x61, 0x01]));     // ESC a 1  centre
 
     for (let y = 0; y < prepared.height; y += bandRows) {

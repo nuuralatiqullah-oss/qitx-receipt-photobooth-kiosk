@@ -201,8 +201,9 @@
       audio: false,
       video: {
         facingMode: state.facing,
-        width: { ideal: 1920 },
-        height: { ideal: 1080 }
+        width: { ideal: 3840 },
+        height: { ideal: 2160 },
+        advanced: [{ width: 3840 }, { width: 2560 }, { width: 1920 }]
       }
     };
     state.stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -219,18 +220,41 @@
     }
   }
 
-  function grabFrame() {
-    const v = $("video");
+  function toCanvas(source, w, h) {
     const c = document.createElement("canvas");
-    c.width = v.videoWidth;
-    c.height = v.videoHeight;
+    c.width = w;
+    c.height = h;
     const ctx = c.getContext("2d");
     if (CFG.MIRROR_PREVIEW && state.facing === "user") {
-      ctx.translate(c.width, 0);
+      ctx.translate(w, 0);
       ctx.scale(-1, 1);
     }
-    ctx.drawImage(v, 0, 0, c.width, c.height);
+    ctx.drawImage(source, 0, 0, w, h);
     return c;
+  }
+
+  function grabFrame() {
+    const v = $("video");
+    return toCanvas(v, v.videoWidth, v.videoHeight);
+  }
+
+  /* The video preview is often capped well below the sensor's real
+     resolution. ImageCapture.takePhoto() asks for a full still, which
+     is noticeably more detail to dither from. Falls back silently. */
+  async function capturePhoto() {
+    const track = state.stream && state.stream.getVideoTracks()[0];
+    if (track && typeof window.ImageCapture === "function") {
+      try {
+        const shot = await new window.ImageCapture(track).takePhoto();
+        const bmp = await createImageBitmap(shot);
+        if (bmp.width >= $("video").videoWidth) {
+          return toCanvas(bmp, bmp.width, bmp.height);
+        }
+      } catch (e) {
+        /* not supported on this device — use the preview frame */
+      }
+    }
+    return grabFrame();
   }
 
   function paintShots() {
@@ -281,7 +305,7 @@
       flash.classList.remove("fire");
       void flash.offsetWidth;
       flash.classList.add("fire");
-      state.shots.push(grabFrame());
+      state.shots.push(await capturePhoto());
       paintShots();
       if (state.shots.length >= state.frame.shots) {
         stopCamera();
@@ -315,6 +339,7 @@
         gamma: CFG.PHOTO_GAMMA,
         autoLevels: CFG.PHOTO_AUTO_LEVELS,
         sharpen: CFG.PHOTO_SHARPEN,
+        localContrast: CFG.PHOTO_LOCAL_CONTRAST,
         blurPasses: CFG.PHOTO_BLUR
       }
     });
@@ -332,6 +357,68 @@
     target.getContext("2d").drawImage(preview, 0, 0);
   }
 
+  /* Prints the same shot at four settings, labelled A-D, so the
+     operator can pick the best one on real paper. */
+  async function printTestCard() {
+    if (!window.Printer.isConnected()) {
+      toast("Connect the printer first", true);
+      return;
+    }
+    if (!state.shots.length) {
+      toast("Take a photo first", true);
+      return;
+    }
+    show("scrPrinting");
+    $("printingMsg").textContent = "PRINTING TEST…";
+    try {
+      const card = window.Imaging.buildTestCard(state.shots[0], CFG.PRINT_WIDTH_DOTS, {
+        dither: CFG.DITHER,
+        gamma: CFG.PHOTO_GAMMA,
+        autoLevels: CFG.PHOTO_AUTO_LEVELS
+      });
+      const prep = window.Imaging.prepareForPrint(card, { dither: CFG.DITHER });
+      await window.Printer.print(prep, {
+        bandRows: CFG.RASTER_BAND_ROWS,
+        chunkBytes: CFG.USB_CHUNK_BYTES,
+        cutMode: CFG.CUT_MODE,
+        feedBeforeCut: CFG.FEED_BEFORE_CUT,
+        density: CFG.PRINT_DENSITY,
+        speed: CFG.PRINT_SPEED
+      });
+      toast("Compare A-D, then set PHOTO_DOT_SIZE in config.js");
+    } catch (e) {
+      toast("Test print failed: " + e.message, true);
+    }
+    show("scrReview");
+  }
+
+  /* Prints known patterns to tell a printer fault apart from an
+     image-processing problem. */
+  async function printDiagnostic() {
+    if (!window.Printer.isConnected()) {
+      toast("Connect the printer first", true);
+      return;
+    }
+    show("scrPrinting");
+    $("printingMsg").textContent = "PRINTING DIAGNOSTIC…";
+    try {
+      const card = window.Imaging.buildDiagnostic(CFG.PRINT_WIDTH_DOTS);
+      const prep = window.Imaging.prepareForPrint(card, {});
+      await window.Printer.print(prep, {
+        bandRows: CFG.RASTER_BAND_ROWS,
+        chunkBytes: CFG.USB_CHUNK_BYTES,
+        cutMode: CFG.CUT_MODE,
+        feedBeforeCut: CFG.FEED_BEFORE_CUT,
+        density: CFG.PRINT_DENSITY,
+        speed: CFG.PRINT_SPEED
+      });
+      toast("Check the black bars for streaks or fading");
+    } catch (e) {
+      toast("Diagnostic failed: " + e.message, true);
+    }
+    show("scrReview");
+  }
+
   async function doPrint() {
     if (!window.Printer.isConnected()) {
       toast("Connect the printer first — tap the Printer button", true);
@@ -346,7 +433,9 @@
           bandRows: CFG.RASTER_BAND_ROWS,
           chunkBytes: CFG.USB_CHUNK_BYTES,
           cutMode: CFG.CUT_MODE,
-          feedBeforeCut: CFG.FEED_BEFORE_CUT
+          feedBeforeCut: CFG.FEED_BEFORE_CUT,
+          density: CFG.PRINT_DENSITY,
+          speed: CFG.PRINT_SPEED
         });
       }
       await finishSession();
@@ -458,6 +547,8 @@
     };
 
     $("btnRetake").onclick = goCapture;
+    $("btnTestCard").onclick = printTestCard;
+    $("btnDiag").onclick = printDiagnostic;
     $("btnPrint").onclick = doPrint;
     $("btnPrintAgain").onclick = doPrint;
     $("btnFinish").onclick = hardReset;

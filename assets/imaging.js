@@ -118,6 +118,24 @@
     return out;
   }
 
+  /* Local contrast. A face is mostly midtones, and midtones are where
+     dither noise lives. This re-centres each region around its own
+     local average, so a cheek and a beard separate into light and dark
+     instead of both becoming 50% grey speckle. Biggest single win for
+     perceived sharpness on thermal. */
+  function localContrast(g, w, h, amount, radius) {
+    if (!amount) return g;
+    let base = g;
+    const passes = Math.max(1, Math.round((radius || 12) / 4));
+    for (let i = 0; i < passes; i++) base = boxBlur(base, w, h, 1);
+    const out = new Float32Array(g.length);
+    for (let i = 0; i < g.length; i++) {
+      // push each pixel away from its neighbourhood average
+      out[i] = Math.max(0, Math.min(255, base[i] + (g[i] - base[i]) * (1 + amount)));
+    }
+    return out;
+  }
+
   /* ---------- dithering ---------- */
 
   function ditherFloyd(g, w, h) {
@@ -194,6 +212,7 @@
     let g = toGray(sctx.getImageData(0, 0, lw, lh));
     if (o.blurPasses) g = boxBlur(g, lw, lh, o.blurPasses);
     if (o.autoLevels !== false) g = autoLevels(g, 0.02, 0.98);
+    if (o.localContrast) g = localContrast(g, lw, lh, o.localContrast, o.localRadius || 12);
     if (o.sharpen) g = sharpen(g, lw, lh, o.sharpen);
     g = applyGamma(g, o.gamma == null ? 0.8 : o.gamma);
 
@@ -302,6 +321,177 @@
       for (let i = 0; i < g.length; i++) bits[i] = g[i] < cut ? 1 : 0;
     }
     return { width: w, height: h, bits: bits };
+  };
+
+  /* ---------- settings test card ----------
+     Prints the same shot at several settings on one strip so you can
+     pick what looks best on real paper instead of guessing. */
+
+  Imaging.TEST_VARIANTS = [
+    { tag: "A", label: "dot 1  contrast 0.6", opts: { dotSize: 1, localContrast: 0.6, sharpen: 0.8 } },
+    { tag: "B", label: "dot 2  contrast 0.6", opts: { dotSize: 2, localContrast: 0.6, sharpen: 0.8 } },
+    { tag: "C", label: "dot 2  contrast 1.0", opts: { dotSize: 2, localContrast: 1.0, sharpen: 1.0 } },
+    { tag: "D", label: "dot 3  contrast 0.8", opts: { dotSize: 3, localContrast: 0.8, sharpen: 1.0 } }
+  ];
+
+  Imaging.buildTestCard = function (img, width, base) {
+    base = base || {};
+    const W = width || 576;
+    const m = Math.round(W * 0.035);          // side margin
+    const tw = W - m * 2;                     // tile width
+    const th = Math.round(tw * 0.75);         // 4:3 tiles
+    const labelH = Math.round(W * 0.055);
+    const headH = Math.round(W * 0.15);
+    const vars = Imaging.TEST_VARIANTS;
+
+    const canvas = document.createElement("canvas");
+    canvas.width = W;
+    canvas.height = headH + vars.length * (th + labelH + m) + m * 2;
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    ctx.fillStyle = "#000";
+    ctx.textAlign = "center";
+    ctx.font = "bold " + Math.round(W * 0.062) + "px Georgia, serif";
+    ctx.fillText("SETTINGS TEST", W / 2, Math.round(headH * 0.45));
+    ctx.font = Math.round(W * 0.038) + "px monospace";
+    ctx.fillText("pick the clearest one", W / 2, Math.round(headH * 0.72));
+
+    let y = headH;
+    vars.forEach(function (v) {
+      ctx.fillStyle = "#000";
+      ctx.textAlign = "left";
+      ctx.font = "bold " + Math.round(W * 0.042) + "px monospace";
+      ctx.fillText(v.tag + "  " + v.label, m, y + Math.round(labelH * 0.75));
+      y += labelH;
+
+      const opts = {
+        dotSize: v.opts.dotSize,
+        dither: base.dither || "atkinson",
+        gamma: base.gamma == null ? 0.8 : base.gamma,
+        autoLevels: base.autoLevels !== false,
+        localContrast: v.opts.localContrast,
+        sharpen: v.opts.sharpen,
+        blurPasses: 0
+      };
+      const tile = Imaging.processPhoto(img, tw, th, opts);
+      ctx.imageSmoothingEnabled = false;
+      ctx.drawImage(tile, m, y);
+      ctx.strokeStyle = "#000";
+      ctx.lineWidth = 2;
+      ctx.strokeRect(m, y, tw, th);
+      y += th + m;
+    });
+
+    return canvas;
+  };
+
+  /* ---------- printer diagnostic ----------
+     Prints known patterns so a printer fault can be told apart from an
+     image-processing problem. Read the result like this:
+
+       - White streaks running DOWN the solid black bar, always in the
+         same columns        -> dirty or failing print head elements
+       - Solid bar fades or goes patchy TOWARDS THE BOTTOM
+                             -> head overheating, or density too high
+                                for the print speed
+       - Dark patches (75-100%) look broken but light ones are fine
+                             -> not enough energy per dot: raise density
+                                and/or lower speed
+       - Thin vertical lines with gaps
+                             -> specific dead dots on the head
+       - Everything clean    -> the printer is fine; it is the image
+                                pipeline or the photo itself
+  ---------------------------------------------------------------- */
+  Imaging.buildDiagnostic = function (width) {
+    const W = width || 576;
+    const m = Math.round(W * 0.03);
+    const canvas = document.createElement("canvas");
+    const labelH = Math.round(W * 0.05);
+    const barH = Math.round(W * 0.22);
+    const patchH = Math.round(W * 0.09);
+    const levels = [12, 25, 37, 50, 62, 75, 87, 100];
+    canvas.width = W;
+    canvas.height = Math.round(W * 0.17)            // title
+      + labelH + barH + m                            // solid bar
+      + labelH + levels.length * patchH + m          // density ladder
+      + labelH + barH + m                            // fine lines
+      + labelH + Math.round(W * 0.9) + m * 2;        // long fade bar
+    const ctx = canvas.getContext("2d");
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    ctx.fillStyle = "#000";
+
+    ctx.textAlign = "center";
+    ctx.font = "bold " + Math.round(W * 0.058) + "px Georgia, serif";
+    ctx.fillText("PRINTER DIAGNOSTIC", W / 2, Math.round(W * 0.085));
+    ctx.font = Math.round(W * 0.032) + "px monospace";
+    ctx.fillText("look for white streaks + fading", W / 2, Math.round(W * 0.13));
+
+    ctx.textAlign = "left";
+    const label = (t, y) => {
+      ctx.font = "bold " + Math.round(W * 0.036) + "px monospace";
+      ctx.fillText(t, m, y + Math.round(labelH * 0.7));
+      return y + labelH;
+    };
+
+    let y = Math.round(W * 0.17);
+
+    // 1. solid black — shows dirty head elements as white streaks
+    y = label("1  SOLID BLACK  (streaks = dirty head)", y);
+    ctx.fillRect(m, y, W - m * 2, barH);
+    y += barH + m;
+
+    // 2. density ladder — shows where dark tones break down
+    y = label("2  DENSITY LADDER  12% -> 100%", y);
+    const pw = W - m * 2;
+    levels.forEach(function (pct) {
+      const id = ctx.createImageData(pw, patchH);
+      // ordered 4x4 pattern: exact, repeatable dot coverage
+      const bayer = [0,8,2,10, 12,4,14,6, 3,11,1,9, 15,7,13,5];
+      for (let yy = 0; yy < patchH; yy++) {
+        for (let xx = 0; xx < pw; xx++) {
+          const t = bayer[(yy % 4) * 4 + (xx % 4)] / 16 * 100;
+          const black = pct > t;
+          const p = (yy * pw + xx) * 4;
+          const v = black ? 0 : 255;
+          id.data[p] = id.data[p + 1] = id.data[p + 2] = v;
+          id.data[p + 3] = 255;
+        }
+      }
+      ctx.putImageData(id, m, y);
+      ctx.font = Math.round(W * 0.03) + "px monospace";
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(m, y, Math.round(W * 0.12), Math.round(W * 0.045));
+      ctx.fillStyle = "#000";
+      ctx.fillText(pct + "%", m + 4, y + Math.round(W * 0.036));
+      y += patchH;
+    });
+    y += m;
+
+    // 3. single-dot lines — finds individual dead elements
+    y = label("3  1-DOT LINES  (gaps = dead dots)", y);
+    const id2 = ctx.createImageData(pw, barH);
+    for (let yy = 0; yy < barH; yy++) {
+      for (let xx = 0; xx < pw; xx++) {
+        const vline = xx % 4 === 0;
+        const hline = yy % 4 === 0;
+        const black = yy < barH / 2 ? vline : hline;
+        const p = (yy * pw + xx) * 4;
+        const v = black ? 0 : 255;
+        id2.data[p] = id2.data[p + 1] = id2.data[p + 2] = v;
+        id2.data[p + 3] = 255;
+      }
+    }
+    ctx.putImageData(id2, m, y);
+    y += barH + m;
+
+    // 4. long solid bar — reveals thermal fade down the length
+    y = label("4  LONG BLACK  (fade = head too hot)", y);
+    ctx.fillRect(m, y, pw, Math.round(W * 0.9));
+
+    return canvas;
   };
 
   Imaging.bitsToCanvas = function (prepared) {

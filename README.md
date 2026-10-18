@@ -12,7 +12,7 @@ Flow: **Welcome → Select Frame → Capture → Review → Print → QR / Done*
 
 | Requirement | Why it works |
 |---|---|
-| Printing from a web page | The CT-S310II speaks **ESC/POS**, so WebUSB can send it raster bytes directly. No driver, no print dialog. |
+| Printing from a web page | The printer speaks **ESC/POS**, so WebUSB can send it raster bytes directly. No driver, no print dialog. |
 | Hosting on GitHub Pages | WebUSB and the camera need **HTTPS**. Pages is HTTPS by default. |
 | Supabase from a static site | The anon key is public by design. RLS limits it to "read frames, insert prints, upload photos". |
 | Running on the Redmi Pad 2 9.7 | Chrome for Android supports WebUSB + `getUserMedia`. Printer connects by **USB-C OTG**. |
@@ -81,6 +81,9 @@ silently. After a full tablet restart you may need to tap once more.
 | `PHOTO_DOT_SIZE` | **The main dial for photo quality.** `1` finest, `2` recommended, `3` chunky retro. |
 | `DITHER` | `"atkinson"` (clean, recommended) or `"floyd"` (finer but muddier). |
 | `PHOTO_GAMMA` | Lower (e.g. `0.7`) if prints are too dark. |
+| `PRINT_SPEED` | Lower number = slower = more heat per dot. Fixes broken blacks. |
+| `PRINT_DENSITY` | `0` standard, `1-127` darker, `128-255` paler. |
+| `PHOTO_LOCAL_CONTRAST` | Separates face from hair from clothing. `0.6` default, `1.0` graphic. |
 | `PHOTO_SHARPEN` | Raise toward `1.2` for punchier edges. |
 | `COUNTDOWN_SECONDS` | Seconds before each shot. |
 | `AUTO_PRINT_COPIES` | Print 2 copies per session (one for the guest, one for the guestbook). |
@@ -123,7 +126,12 @@ Design frames with lots of white space.
 **"This browser can't talk to USB printers"** — You're on Safari, Firefox,
 or plain `http://`. Use Chrome or Edge over HTTPS.
 
-**Nothing in the USB chooser** — The tablet isn't powering the printer over
+**Nothing in the USB chooser** — First, tap **Printer** a second time:
+the first tap filters by known vendor IDs, and if nothing matched, the
+second shows every USB device so you can pick the printer yourself. Many
+Gainscha/Gprinter units report an unpublished vendor ID and need this.
+
+If the list is still empty, the tablet isn't powering the printer over
 OTG. Use a powered USB hub between tablet and printer, or an OTG cable
 with its own power input.
 
@@ -132,6 +140,47 @@ Unplug and replug, and close any Citizen utility app.
 
 **Right side of the print is cut off** — You're on 58mm paper. Set
 `PRINT_WIDTH_DOTS: 384`.
+
+**Dark areas break up, streak or fade (but light areas are fine)** —
+Tap **Printer diagnostic** on the review screen. It prints solid black
+bars, a density ladder and 1-dot lines. Read it like this:
+
+| What you see | Cause | Fix |
+|---|---|---|
+| White streaks running down the black bar, same columns every time | Dirt or residue on the print head | Clean it (below) |
+| Black bar fades toward the bottom | Head overheating | Lower `PRINT_DENSITY`, raise `PRINT_SPEED` number, shorter prints |
+| Only 75–100% patches look broken | Not enough energy per dot | Set `PRINT_SPEED: 2` (slower), then `PRINT_DENSITY: 4` |
+| Gaps in the 1-dot lines, same spots | Dead head elements | Head is worn — needs replacing |
+| All four look clean | Printer is fine | It's the photo or the pipeline |
+
+**Cleaning the print head** — this fixes most streaking and takes two
+minutes. Power the printer off and open the paper cover. The print head
+is the thin dark strip the paper slides under. Wipe it along its length
+with a cotton bud dampened with **isopropyl alcohol (90%+)**. Never use
+water, and never scrape it. Let it dry fully before closing. Do this
+every few thousand prints, or any time streaks appear.
+
+**Other things that cause broken blacks**
+
+- **Paper quality.** Cheap or old thermal rolls have low sensitivity and
+  simply won't go properly black. Try a fresh, good-quality 80mm roll
+  before blaming the printer.
+- **Paper loaded with the wrong side up.** Thermal paper only prints on
+  one side. If prints are faint everywhere, flip the roll.
+- **Heat.** A head that has been printing dense images continuously will
+  throttle itself. Space out test prints.
+
+**Photos aren't sharp enough** — Take a photo, then tap **Print settings
+test** on the review screen. It prints the same shot four times (A-D) at
+different settings so you can compare on real paper, then set
+`PHOTO_DOT_SIZE` and `PHOTO_LOCAL_CONTRAST` to match the one you like.
+
+Be aware of the ceiling: a 480-dot photo slot at `PHOTO_DOT_SIZE: 2` gives
+the face about 130x170 pixels. Counter-intuitively **dot 2 usually looks
+sharper than dot 1** — at dot 1 the dithering scatters detail into fine
+noise that your eye averages back into grey, while chunkier dots survive.
+To genuinely gain detail, make the photo slot bigger (up to 576 dots wide)
+rather than reducing the dot size.
 
 **Photos print dark and muddy, but text is sharp** — This is not the
 printer. A thermal head spreads heat into neighbouring dots, so
