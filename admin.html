@@ -1,0 +1,300 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#ffffff">
+<title>Booth Admin</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="assets/icons/icon-192.png" sizes="192x192" type="image/png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#1a1626;--ink-soft:#6b6480;--paper:#fff;--wash:#f6f3ff;
+  --mango:#ffb703;--punch:#ff4d6d;--jade:#06d6a0;--sky:#3a86ff;--line:#e7e2f5;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;min-height:100%}
+body{background:var(--wash);color:var(--ink);font-family:Outfit,'Segoe UI',system-ui,-apple-system,sans-serif;padding-bottom:40px}
+
+header{
+  position:sticky;top:0;z-index:5;background:var(--paper);
+  border-bottom:2.5px solid var(--ink);
+  padding:calc(12px + env(safe-area-inset-top)) 16px 12px;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;
+}
+.title{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;font-weight:600;font-size:21px}
+.btn{
+  font-family:inherit;font-weight:700;font-size:14px;
+  border:2.5px solid var(--ink);border-radius:999px;background:var(--mango);color:var(--ink);
+  padding:11px 20px;min-height:46px;cursor:pointer;box-shadow:3px 3px 0 var(--ink);
+}
+.btn:active{transform:translate(3px,3px);box-shadow:none}
+.btn.go{background:var(--jade)}
+.btn.alt{background:var(--paper)}
+.btn.warn{background:var(--punch);color:#fff}
+.btn.sm{font-size:12px;padding:8px 14px;min-height:40px;box-shadow:2px 2px 0 var(--ink)}
+.btn:disabled{opacity:.45}
+
+.tabs{display:flex;gap:8px;overflow-x:auto;padding:12px 16px;background:var(--paper);border-bottom:2.5px solid var(--ink)}
+.tab{
+  white-space:nowrap;border:2px solid var(--ink);border-radius:999px;background:var(--paper);
+  padding:9px 16px;min-height:42px;font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;
+}
+.tab.on{background:var(--ink);color:#fff}
+
+main{max-width:720px;margin:0 auto;padding:18px 16px}
+.panel{display:none}
+.panel.on{display:block}
+
+.box{background:var(--paper);border:2.5px solid var(--ink);border-radius:16px;padding:18px;margin-bottom:16px;box-shadow:4px 4px 0 var(--ink)}
+.box h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;font-weight:600;font-size:18px;margin:0 0 4px}
+.box p.note{color:var(--ink-soft);font-size:13.5px;line-height:1.5;margin:0 0 16px}
+
+label{display:block;margin-bottom:14px}
+label span.lb{display:block;font-size:13px;font-weight:600;margin-bottom:6px}
+label span.hint{display:block;font-size:12px;color:var(--ink-soft);margin-top:5px;line-height:1.45}
+input[type=text],input[type=number],input[type=password],select,textarea{
+  width:100%;font-family:inherit;font-size:15px;color:var(--ink);background:var(--paper);
+  border:2px solid var(--line);border-radius:11px;padding:12px 13px;min-height:48px;
+}
+input:focus,select:focus,textarea:focus{outline:none;border-color:var(--sky)}
+.check{display:flex;align-items:center;gap:11px;margin-bottom:14px;font-size:14.5px;font-weight:500}
+.check input{width:22px;height:22px;accent-color:var(--jade);flex:0 0 auto}
+.two{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+@media(max-width:460px){.two{grid-template-columns:1fr}}
+
+.tpl{display:flex;gap:13px;align-items:center;border:2px solid var(--line);border-radius:13px;padding:11px;margin-bottom:11px}
+.tpl canvas{width:52px;height:78px;object-fit:contain;background:#fff;border:1.5px solid var(--line);border-radius:5px;flex:0 0 auto}
+.tpl .meta{flex:1;min-width:0}
+.tpl .nm{font-weight:600;font-size:14.5px}
+.tpl .sub{font-size:12px;color:var(--ink-soft);margin-top:3px}
+
+.shots{display:grid;grid-template-columns:repeat(auto-fill,minmax(132px,1fr));gap:13px}
+.shot{border:2px solid var(--line);border-radius:13px;overflow:hidden;background:var(--paper)}
+.shot img{width:100%;display:block;background:#fff;aspect-ratio:2/3;object-fit:contain}
+.shot .act{display:grid;grid-template-columns:1fr 1fr;gap:6px;padding:8px}
+.shot .act .btn:last-child{grid-column:1/-1}
+.shot .when{font-size:11px;color:var(--ink-soft);padding:0 8px 7px}
+
+.empty{text-align:center;color:var(--ink-soft);padding:34px 16px;font-size:14.5px;line-height:1.6}
+.pill{display:inline-block;background:var(--wash);border:1.5px solid var(--line);border-radius:999px;padding:4px 11px;font-size:12px;font-weight:600;margin-right:6px}
+
+.gate{max-width:360px;margin:16vh auto;padding:0 20px}
+.toast{position:fixed;left:50%;bottom:22px;transform:translateX(-50%);z-index:50;background:var(--ink);color:#fff;border-radius:13px;padding:13px 18px;font-size:14px;max-width:88vw;display:none}
+.toast.err{background:var(--punch)}
+.toast.show{display:block}
+dialog{border:2.5px solid var(--ink);border-radius:16px;padding:20px;max-width:420px;width:92vw;font-family:Outfit}
+dialog::backdrop{background:rgba(26,22,38,.55)}
+</style>
+</head>
+<body>
+
+<!-- PIN gate -->
+<div id="gate" class="gate">
+  <div class="box">
+    <h2>Admin</h2>
+    <p class="note">Enter the booth PIN to change settings.</p>
+    <label><span class="lb">PIN</span>
+      <input type="password" id="pin" inputmode="numeric" autocomplete="off">
+    </label>
+    <div style="display:flex;gap:10px">
+      <button class="btn go" id="btnUnlock" style="flex:1">Unlock</button>
+      <button class="btn alt" id="btnLeave">Back</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin -->
+<div id="admin" hidden>
+  <header>
+    <div class="title">Booth Admin</div>
+    <button class="btn alt sm" id="btnKiosk">Open booth</button>
+  </header>
+
+  <div class="tabs">
+    <button class="tab on" data-p="text">Text</button>
+    <button class="tab" data-p="tpl">Layouts</button>
+    <button class="tab" data-p="photos">Photos</button>
+    <button class="tab" data-p="camera">Camera</button>
+    <button class="tab" data-p="printer">Printer</button>
+  </div>
+
+  <main>
+    <!-- TEXT -->
+    <section class="panel on" data-p="text">
+      <div class="box">
+        <h2>What guests see</h2>
+        <p class="note">This wording appears on the booth screens and is printed on every strip.</p>
+        <label><span class="lb">Booth name</span><input type="text" id="f_BOOTH_NAME">
+          <span class="hint">Big heading on the welcome screen and the top of the printed strip.</span></label>
+        <label><span class="lb">Event name</span><input type="text" id="f_EVENT_NAME"></label>
+        <label><span class="lb">Welcome line</span><input type="text" id="f_TAGLINE"></label>
+        <label><span class="lb">Start button</span><input type="text" id="f_START_LABEL"></label>
+        <label><span class="lb">Printed footer</span><input type="text" id="f_FOOTER_LINE">
+          <span class="hint">Printed under the photos, above the date.</span></label>
+      </div>
+      <div class="box">
+        <h2>Admin PIN</h2>
+        <p class="note">Keeps guests out of this page during an event. It is stored on the tablet in plain text, so use a number you don't use anywhere else.</p>
+        <label><span class="lb">PIN</span><input type="text" id="f_ADMIN_PIN" inputmode="numeric"></label>
+      </div>
+    </section>
+
+    <!-- LAYOUTS -->
+    <section class="panel" data-p="tpl">
+      <div class="box">
+        <h2>Strip layouts</h2>
+        <p class="note">Turn off any layout you don't want guests to pick. Photo slots run nearly edge to edge so each photo gets the most dots the printer can give it.</p>
+        <div id="tplList"></div>
+      </div>
+      <div class="box">
+        <h2>Add a layout</h2>
+        <p class="note">Set how many photos and the shape. Slots are placed for you across the full 576-dot width.</p>
+        <label><span class="lb">Name</span><input type="text" id="t_name" placeholder="Wedding strip"></label>
+        <div class="two">
+          <label><span class="lb">Photos</span>
+            <select id="t_shots"><option>1</option><option selected>2</option><option>3</option><option>4</option><option>6</option></select></label>
+          <label><span class="lb">Photo shape</span>
+            <select id="t_ratio">
+              <option value="1.3333">Landscape 4:3</option>
+              <option value="1">Square</option>
+              <option value="0.8">Portrait 4:5</option>
+            </select></label>
+        </div>
+        <button class="btn go" id="btnAddTpl">Add layout</button>
+      </div>
+    </section>
+
+    <!-- PHOTOS -->
+    <section class="panel" data-p="photos">
+      <div class="box">
+        <h2>Recent strips</h2>
+        <p class="note" id="photoNote"></p>
+        <div class="shots" id="shotList"></div>
+        <div style="margin-top:16px;display:flex;gap:10px;flex-wrap:wrap">
+          <button class="btn alt sm" id="btnRefresh">Refresh</button>
+          <button class="btn warn sm" id="btnClearPhotos">Delete all</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- CAMERA -->
+    <section class="panel" data-p="camera">
+      <div class="box">
+        <h2>Camera</h2>
+        <p class="note">Changes apply next time the booth screen loads.</p>
+        <label><span class="lb">Which camera</span>
+          <select id="f_CAMERA_FACING">
+            <option value="user">Front (selfie)</option>
+            <option value="environment">Rear</option>
+          </select></label>
+        <div class="check"><input type="checkbox" id="f_MIRROR_PREVIEW"><span>Mirror the preview, like a mirror</span></div>
+        <label><span class="lb">Capture width</span>
+          <select id="f_CAMERA_IDEAL_WIDTH">
+            <option value="1920">1920 — safe on older tablets</option>
+            <option value="2560">2560</option>
+            <option value="3840">3840 — best detail</option>
+          </select>
+          <span class="hint">The booth asks for this and falls back if the camera can't manage it.</span></label>
+        <label><span class="lb">Countdown (seconds)</span><input type="number" id="f_COUNTDOWN_SECONDS" min="0" max="10"></label>
+      </div>
+      <div class="box">
+        <h2>Booth behaviour</h2>
+        <div class="check"><input type="checkbox" id="f_ALLOW_GUEST_PRINT"><span>Guests can print it themselves</span></div>
+        <div class="check"><input type="checkbox" id="f_UPLOAD_PHOTOS"><span>Upload to Supabase</span></div>
+        <div class="check"><input type="checkbox" id="f_SHOW_QR"><span>Show a QR code to download</span></div>
+        <div class="two">
+          <label><span class="lb">Copies per print</span><input type="number" id="f_AUTO_PRINT_COPIES" min="1" max="5"></label>
+          <label><span class="lb">Reset after (seconds)</span><input type="number" id="f_IDLE_RESET_SECONDS" min="0" max="600"></label>
+        </div>
+        <label><span class="lb">Keep on tablet</span><input type="number" id="f_KEEP_LOCAL_COPIES" min="0" max="300">
+          <span class="hint">How many recent strips stay on this tablet for the Photos tab.</span></label>
+      </div>
+    </section>
+
+    <!-- PRINTER -->
+    <section class="panel" data-p="printer">
+      <div class="box">
+        <h2>Paper and cutting</h2>
+        <label><span class="lb">Paper width</span>
+          <select id="f_PRINT_WIDTH_DOTS">
+            <option value="576">80mm (576 dots)</option>
+            <option value="384">58mm (384 dots)</option>
+          </select>
+          <span class="hint">If prints are cut off on the right, you're on 58mm.</span></label>
+        <label><span class="lb">Cut</span>
+          <select id="f_CUT_MODE">
+            <option value="partial">Partial — leaves a tab to tear</option>
+            <option value="full">Full — cuts right through</option>
+          </select>
+          <span class="hint">The Gainscha GA-C180I is partial-cut only and ignores "full".</span></label>
+        <label><span class="lb">Feed before cutting</span><input type="number" id="f_FEED_BEFORE_CUT" min="0" max="20"></label>
+      </div>
+      <div class="box">
+        <h2>Photo quality</h2>
+        <p class="note">The printer is 203 dpi and every dot is black or white — there is no grey and no colour. These decide how a photo becomes dots.</p>
+        <label><span class="lb">Dot size</span>
+          <select id="f_PHOTO_DOT_SIZE">
+            <option value="1">1 — finest, can go muddy</option>
+            <option value="2">2 — best for faces</option>
+            <option value="3">3 — chunky retro</option>
+          </select>
+          <span class="hint">Bigger dots survive the heat spreading across the paper. Text always prints at full resolution.</span></label>
+        <label><span class="lb">Dithering</span>
+          <select id="f_DITHER">
+            <option value="atkinson">Atkinson — clean whites</option>
+            <option value="floyd">Floyd–Steinberg — finer, muddier</option>
+          </select></label>
+        <div class="two">
+          <label><span class="lb">Brightness</span><input type="number" id="f_PHOTO_GAMMA" step="0.05" min="0.4" max="1.6">
+            <span class="hint">Below 1 lightens.</span></label>
+          <label><span class="lb">Local contrast</span><input type="number" id="f_PHOTO_LOCAL_CONTRAST" step="0.1" min="0" max="2"></label>
+        </div>
+        <label><span class="lb">Sharpen</span><input type="number" id="f_PHOTO_SHARPEN" step="0.1" min="0" max="2"></label>
+        <div class="check"><input type="checkbox" id="f_PHOTO_AUTO_LEVELS"><span>Auto-fix dim or backlit photos</span></div>
+      </div>
+      <div class="box">
+        <h2>Print energy</h2>
+        <p class="note">If dark areas break up or streak, slow the printer down before making it darker. Leave blank to use the printer's own setting.</p>
+        <div class="two">
+          <label><span class="lb">Speed</span><input type="number" id="f_PRINT_SPEED" min="0" max="255" placeholder="printer default">
+            <span class="hint">Lower is slower and gives solid blacks.</span></label>
+          <label><span class="lb">Density</span><input type="number" id="f_PRINT_DENSITY" min="0" max="255" placeholder="printer default">
+            <span class="hint">0 standard, 1–127 darker.</span></label>
+        </div>
+      </div>
+      <div class="box">
+        <h2>Supabase</h2>
+        <p class="note">Optional. Without it the booth still captures and prints — it just won't upload or show a QR code. Use the publishable key, never the secret one.</p>
+        <label><span class="lb">Project URL</span><input type="text" id="f_SUPABASE_URL" placeholder="https://xxxx.supabase.co"></label>
+        <label><span class="lb">Publishable key</span><input type="text" id="f_SUPABASE_ANON_KEY" placeholder="sb_publishable_..."></label>
+      </div>
+      <div class="box">
+        <h2>Start over</h2>
+        <p class="note">Puts every setting back to the defaults in the code. Your saved strips are not touched.</p>
+        <button class="btn warn" id="btnResetAll">Reset all settings</button>
+      </div>
+    </section>
+  </main>
+
+  <div style="position:sticky;bottom:0;background:var(--paper);border-top:2.5px solid var(--ink);padding:13px 16px calc(13px + env(safe-area-inset-bottom));display:flex;gap:10px;justify-content:center">
+    <button class="btn go" id="btnSave" style="flex:1;max-width:320px">Save changes</button>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script src="assets/config.js"></script>
+<script src="assets/settings.js"></script>
+<script src="assets/frames.js"></script>
+<script src="assets/admin.js"></script>
+<script>
+if ("serviceWorker" in navigator) {
+  navigator.serviceWorker.register("sw.js").catch(function () {});
+}
+</script>
+</body>
+</html>

@@ -5,7 +5,8 @@
 (function () {
   "use strict";
 
-  const CFG = window.CONFIG;
+  /* Defaults from config.js with this tablet's Admin overrides on top. */
+  const CFG = window.Settings ? window.Settings.load() : window.CONFIG;
   const $ = id => document.getElementById(id);
 
   const state = {
@@ -15,7 +16,7 @@
     sheet: null,        // composed canvas
     prepared: null,     // 1-bit bitmap
     stream: null,
-    facing: "user",
+    facing: (window.CONFIG && window.CONFIG.CAMERA_FACING) || "user",
     sessionId: null,
     guestUrl: null,
     idleTimer: null,
@@ -129,17 +130,17 @@
     grid.innerHTML = "";
     state.frames.forEach(frame => {
       const card = document.createElement("button");
-      card.className = "frame-card";
+      card.className = "card";
       const cv = document.createElement("canvas");
       drawFramePreview(cv, frame);
       const label = document.createElement("div");
-      label.className = "label";
+      label.className = "tag";
       label.textContent = frame.name + " · " + frame.shots + " shot" + (frame.shots > 1 ? "s" : "");
       card.appendChild(cv);
       card.appendChild(label);
       card.onclick = function () {
         state.frame = frame;
-        grid.querySelectorAll(".frame-card").forEach(c => c.classList.remove("sel"));
+        grid.querySelectorAll(".card").forEach(c => c.classList.remove("sel"));
         card.classList.add("sel");
         $("btnUseFrame").disabled = false;
       };
@@ -149,7 +150,9 @@
 
   // Optional: frames defined in Supabase override/extend the built-ins.
   async function loadFrames() {
-    state.frames = window.BUILTIN_FRAMES.slice();
+    state.frames = window.Settings
+      ? window.Settings.allFrames()
+      : window.BUILTIN_FRAMES.slice();
     if (!supabase) return;
     try {
       const res = await supabase
@@ -201,8 +204,8 @@
       audio: false,
       video: {
         facingMode: state.facing,
-        width: { ideal: 3840 },
-        height: { ideal: 2160 },
+        width: { ideal: CFG.CAMERA_IDEAL_WIDTH || 3840 },
+        height: { ideal: Math.round((CFG.CAMERA_IDEAL_WIDTH || 3840) * 9 / 16) },
         advanced: [{ width: 3840 }, { width: 2560 }, { width: 1920 }]
       }
     };
@@ -452,11 +455,30 @@
     return new Promise(resolve => canvas.toBlob(resolve, type, quality));
   }
 
+  /* Keep a copy on the tablet so Admin can reprint or share it later,
+     with or without internet. Trimmed to KEEP_LOCAL_COPIES. */
+  async function saveLocalCopy(remoteUrl) {
+    if (!window.Settings || !state.sheet) return;
+    if (!state.shots.length) return;   // a reprint is already saved
+    try {
+      const blob = await canvasToBlob(state.sheet, "image/jpeg", 0.9);
+      if (!blob) return;
+      await window.Settings.addPrint(blob, {
+        frameId: String(state.frame.id),
+        frameName: state.frame.name,
+        remoteUrl: remoteUrl || ""
+      });
+    } catch (e) {
+      console.warn("Local copy failed:", e.message);
+    }
+  }
+
   async function finishSession() {
     $("qrBox").style.display = "none";
     state.guestUrl = null;
 
     if (!supabase || !CFG.UPLOAD_PHOTOS) {
+      await saveLocalCopy("");
       $("doneLead").textContent = "Collect your print from the printer";
       return;
     }
@@ -483,6 +505,8 @@
       });
       if (ins.error) console.warn("prints insert:", ins.error.message);
 
+      await saveLocalCopy(state.guestUrl);
+
       if (CFG.SHOW_QR && state.guestUrl && window.QRCode) {
         await window.QRCode.toCanvas($("qrCanvas"), state.guestUrl, { width: 200, margin: 1 });
         $("qrBox").style.display = "block";
@@ -492,6 +516,7 @@
       }
     } catch (e) {
       console.warn("Upload failed:", e.message);
+      await saveLocalCopy("");
       $("doneLead").textContent = "Collect your print from the printer";
     }
   }
@@ -506,7 +531,7 @@
     state.prepared = null;
     state.sessionId = uid(10);
     $("btnUseFrame").disabled = true;
-    document.querySelectorAll(".frame-card").forEach(c => c.classList.remove("sel"));
+    document.querySelectorAll(".card").forEach(c => c.classList.remove("sel"));
     show("scrWelcome");
   }
 
@@ -527,6 +552,8 @@
 
   function wire() {
     $("brandName").firstChild.textContent = CFG.BOOTH_NAME;
+    $("btnStart").textContent = CFG.START_LABEL || "Start";
+    $("btnAdmin").onclick = function () { location.href = "admin.html"; };
     $("brandEvent").textContent = CFG.EVENT_NAME;
     $("welcomeTitle").textContent = CFG.BOOTH_NAME;
     $("welcomeLead").textContent = CFG.TAGLINE;
@@ -546,6 +573,9 @@
       try { await startCamera(); } catch (e) { toast(e.message, true); }
     };
 
+    if (CFG.ALLOW_GUEST_PRINT === false) {
+      $("btnPrint").style.display = "none";
+    }
     $("btnRetake").onclick = goCapture;
     $("btnTestCard").onclick = printTestCard;
     $("btnDiag").onclick = printDiagnostic;
@@ -564,6 +594,46 @@
   }
 
   /* ---------------- boot ---------------- */
+
+  /* Admin sends us here with ?reprint=<id> because the printer code
+     lives on this page. Load that saved sheet and print it as-is. */
+  async function handleReprint() {
+    const id = new URLSearchParams(location.search).get("reprint");
+    if (!id || !window.Settings) return false;
+    history.replaceState(null, "", location.pathname);
+    let rec;
+    try {
+      rec = await window.Settings.getPrint(id);
+    } catch (e) {
+      toast("Couldn't read that saved strip", true);
+      return false;
+    }
+    if (!rec) { toast("That strip is no longer saved", true); return false; }
+
+    try {
+      const bmp = await createImageBitmap(rec.blob);
+      const c = document.createElement("canvas");
+      c.width = bmp.width;
+      c.height = bmp.height;
+      c.getContext("2d").drawImage(bmp, 0, 0);
+      state.sheet = c;
+      state.prepared = window.Imaging.prepareForPrint(c, { dither: CFG.DITHER });
+      state.frame = { id: rec.frameId || "reprint", name: rec.frameName || "Reprint", shots: 0, slots: [] };
+
+      const preview = window.Imaging.bitsToCanvas(state.prepared);
+      const t = $("previewCanvas");
+      t.width = preview.width;
+      t.height = preview.height;
+      t.getContext("2d").drawImage(preview, 0, 0);
+
+      show("scrReview");
+      toast("Reprint ready — tap Print it");
+      return true;
+    } catch (e) {
+      toast("Couldn't prepare that strip: " + e.message, true);
+      return false;
+    }
+  }
 
   async function boot() {
     state.sessionId = uid(10);
@@ -584,6 +654,8 @@
       window.Printer.reconnect().then(paintPrinter);
     }
     paintPrinter();
+
+    await handleReprint();
   }
 
   document.addEventListener("DOMContentLoaded", boot);

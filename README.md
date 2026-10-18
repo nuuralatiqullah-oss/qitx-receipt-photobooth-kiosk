@@ -23,6 +23,42 @@ the tablet won't power or enumerate the printer, see *Troubleshooting*.
 
 ---
 
+## Install it on the tablet
+
+Open the booth in Chrome, then **menu → Add to Home screen**. It installs
+as a fullscreen app with no address bar. Turn on Android **screen
+pinning** as well so guests can't leave the page.
+
+Once installed it keeps working with no internet: the app shell is
+cached by a service worker. **Open it once while online before the
+event** so the fonts and libraries are cached too.
+
+After you push a change, bump `CACHE` in `sw.js` — otherwise tablets
+keep serving the version they already have.
+
+## Admin
+
+Tap **Admin** on the welcome screen. Default PIN is `1234`; change it on
+the Text tab. The PIN is stored in the browser in plain text — it keeps
+guests out during an event, it is not real security, so don't reuse a
+password you care about.
+
+| Tab | What it does |
+|---|---|
+| Text | Booth name, event name, welcome line, printed footer, PIN |
+| Layouts | Turn layouts on or off, add your own, delete yours |
+| Photos | Recent strips kept on the tablet — reprint, share, delete |
+| Camera | Front/rear, mirror, capture width, countdown, copies, idle reset |
+| Printer | Paper width, cut, dot size, dithering, print speed and density, Supabase |
+
+Everything saves to the tablet and overrides `assets/config.js`. The
+booth picks changes up on its next load. **Reset all settings** on the
+Printer tab puts everything back.
+
+Recent strips are stored on the tablet, so Photos works offline. Supabase
+is the off-device copy on top of that. **Share** uses the Android share
+sheet where available and falls back to a download.
+
 ## 1. Deploy to GitHub Pages
 
 ```bash
@@ -79,6 +115,8 @@ silently. After a full tablet restart you may need to tap once more.
 | `PRINT_WIDTH_DOTS` | `576` for 80mm paper, `384` for 58mm. Wrong value = cropped prints. |
 | `CUT_MODE` | `"partial"` leaves a tab to tear; `"full"` cuts clean through. |
 | `PHOTO_DOT_SIZE` | **The main dial for photo quality.** `1` finest, `2` recommended, `3` chunky retro. |
+| `ADMIN_PIN` | PIN for the Admin page. |
+| `ALLOW_GUEST_PRINT` | `false` hides the guest Print button — staff print from Admin instead. |
 | `DITHER` | `"atkinson"` (clean, recommended) or `"floyd"` (finer but muddier). |
 | `PHOTO_GAMMA` | Lower (e.g. `0.7`) if prints are too dark. |
 | `PRINT_SPEED` | Lower number = slower = more heat per dot. Fixes broken blacks. |
@@ -208,8 +246,13 @@ public. Re-run `supabase-setup.sql`.
 ## Files
 
 ```
-index.html              screens + styling
-assets/config.js        everything you edit per event
+index.html              booth screens + styling
+admin.html              settings, layouts, photos
+sw.js                   offline cache + installability
+manifest.webmanifest    install metadata
+assets/config.js        defaults (Admin overrides these per tablet)
+assets/settings.js      settings overlay + saved strips (IndexedDB)
+assets/admin.js         admin page logic
 assets/frames.js        built-in frame layouts
 assets/imaging.js       per-photo levels, gamma, dot size, Atkinson dither
 assets/printer.js       WebUSB + ESC/POS (raster, auto-cut)
