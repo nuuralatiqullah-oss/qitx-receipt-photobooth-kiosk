@@ -238,10 +238,12 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
         <div class="check"><input type="checkbox" id="f_ALLOW_GUEST_PRINT"><span>Guests can print it themselves</span></div>
         <div class="check"><input type="checkbox" id="f_UPLOAD_PHOTOS"><span>Upload to Supabase</span></div>
         <div class="check"><input type="checkbox" id="f_SHOW_QR"><span>Show a QR code to download</span></div>
+        <div class="check"><input type="checkbox" id="f_ASK_COPIES"><span>Ask how many copies when printing</span></div>
         <div class="two">
-          <label><span class="lb">Copies per print</span><input type="number" id="f_AUTO_PRINT_COPIES" min="1" max="5"></label>
-          <label><span class="lb">Reset after (seconds)</span><input type="number" id="f_IDLE_RESET_SECONDS" min="0" max="600"></label>
+          <label><span class="lb">Most copies allowed</span><input type="number" id="f_MAX_COPIES" min="1" max="9"></label>
+          <label><span class="lb">Copies if not asking</span><input type="number" id="f_AUTO_PRINT_COPIES" min="1" max="9"></label>
         </div>
+        <label><span class="lb">Reset after (seconds)</span><input type="number" id="f_IDLE_RESET_SECONDS" min="0" max="600"></label>
         <label><span class="lb">Keep on tablet</span><input type="number" id="f_KEEP_LOCAL_COPIES" min="0" max="300">
           <span class="hint">How many recent strips stay on this tablet for the Photos tab.</span></label>
       </div>

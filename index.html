@@ -28,7 +28,7 @@
   --r:22px;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;margin:0}
+html,body{margin:0;height:100vh;height:100svh}
 body{
   background:var(--paper);
   color:var(--ink);
@@ -55,7 +55,11 @@ body{
 .bar{width:9px;height:26px;border-radius:5px}
 
 /* ---------- screens ---------- */
-.screen{position:fixed;inset:0;z-index:1;display:none;flex-direction:column;padding-top:env(safe-area-inset-top)}
+.screen{
+  position:fixed;left:0;right:0;top:0;z-index:1;
+  height:100vh;height:100svh;
+  display:none;flex-direction:column;padding-top:env(safe-area-inset-top);
+}
 .screen.active{display:flex}
 
 header{
@@ -157,14 +161,21 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
    same shape, so what a guest frames is what gets printed. */
 .capwrap{
   flex:1;display:flex;align-items:center;justify-content:center;
-  gap:14px;padding:4px 14px 14px;min-height:0;
+  gap:14px;padding:4px 14px 14px;min-height:0;overflow:auto;
+}
+/* The wrapper takes the leftover space; the preview box inside is
+   sized in pixels by the app so it is exactly the shape of the photo
+   slot. CSS alone can't guarantee that: in a flex column the ratio
+   loses to whichever max- constraint bites first. */
+.stagewrap{
+  flex:1 1 auto;min-width:0;min-height:0;
+  display:flex;align-items:center;justify-content:center;
 }
 .stage{
   position:relative;background:var(--ink);overflow:hidden;
   border-radius:var(--r);border:2.5px solid var(--ink);
   aspect-ratio:var(--slot-ar,4/3);
-  max-width:100%;max-height:100%;
-  width:auto;height:100%;flex:0 1 auto;
+  max-width:100%;max-height:100%;flex:0 0 auto;
 }
 #video{width:100%;height:100%;object-fit:cover;display:block}
 #video.mirror{transform:scaleX(-1)}
@@ -225,6 +236,31 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 #qrBox{background:#fff;border:2.5px solid var(--ink);border-radius:14px;padding:12px;display:none;margin:0 auto 18px;box-shadow:4px 4px 0 var(--ink)}
 #qrBox canvas{display:block}
 
+/* ---------- copies dialog ---------- */
+.modal{
+  position:fixed;inset:0;z-index:60;display:flex;align-items:center;justify-content:center;
+  background:rgba(26,22,38,.55);padding:20px;
+}
+.modal[hidden]{display:none}
+.modalbox{
+  background:var(--paper);border:2.5px solid var(--ink);border-radius:var(--r);
+  box-shadow:7px 7px 0 var(--ink);padding:26px 24px;text-align:center;
+  max-width:440px;width:100%;
+}
+.nums{display:flex;gap:10px;justify-content:center;flex-wrap:wrap}
+.nums button{
+  font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;
+  font-weight:600;font-size:26px;
+  width:62px;height:62px;border-radius:50%;
+  border:2.5px solid var(--ink);background:var(--mango);color:var(--ink);
+  box-shadow:3px 3px 0 var(--ink);cursor:pointer;
+}
+.nums button:nth-child(2){background:var(--jade)}
+.nums button:nth-child(3){background:var(--sky);color:#fff}
+.nums button:nth-child(4){background:var(--punch);color:#fff}
+.nums button:nth-child(5){background:var(--paper)}
+.nums button:active{transform:translate(3px,3px);box-shadow:none}
+
 .toast{
   position:fixed;left:50%;bottom:24px;transform:translateX(-50%);z-index:99;
   background:var(--ink);color:#fff;border-radius:14px;
@@ -250,11 +286,34 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 }
 
 /* Portrait: strip beside the preview, button underneath. */
+/* Portrait: a strict column. The strip and the controls take only the
+   height they need, and the preview gets whatever is left — so the
+   shutter button can never be pushed off the bottom, however short the
+   screen is once the phone's URL bar is showing. */
 @media (orientation:portrait){
-  .capwrap{flex-wrap:wrap;align-content:center}
-  .stage{flex:1 1 auto;height:auto;max-height:66vh}
-  .capside{flex:1 0 100%;order:3}
+  .capwrap{
+    flex-direction:column;flex-wrap:nowrap;
+    justify-content:center;align-items:center;
+    gap:10px;overflow:hidden;
+  }
+  .ministrip{
+    flex:0 0 auto;flex-direction:row;align-items:center;
+    width:auto;max-width:100%;gap:4px;
+  }
+  .ministrip b{display:none}
+  .stagewrap{flex:1 1 0;width:100%}
+  .capside{flex:0 0 auto;width:100%;align-items:center}
   .capside .btn{width:100%;max-width:430px}
+}
+
+/* A phone with the URL bar up. Give the preview the room by dropping
+   the extras rather than shrinking the button. */
+@media (orientation:portrait) and (max-height:700px){
+  .capwrap{gap:8px;padding:2px 12px 8px}
+  .ministrip{display:none}
+  .shots{display:none}
+  .btn{padding:14px 26px;min-height:54px}
+  header{padding:8px 16px}
 }
 
 @media (prefers-reduced-motion:reduce){
@@ -315,11 +374,13 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
   </header>
   <div class="capwrap">
     <div class="ministrip" id="miniStrip" aria-hidden="true"></div>
-    <div class="stage" id="stage">
-      <video id="video" playsinline autoplay muted></video>
-      <div class="hint" id="captureHint">Tap when you're ready</div>
-      <div class="count" id="countdown">3</div>
-      <div class="flash" id="flash"></div>
+    <div class="stagewrap" id="stageWrap">
+      <div class="stage" id="stage">
+        <video id="video" playsinline autoplay muted></video>
+        <div class="hint" id="captureHint">Tap when you're ready</div>
+        <div class="count" id="countdown">3</div>
+        <div class="flash" id="flash"></div>
+      </div>
     </div>
     <div class="capside">
       <div class="shots" id="shots"></div>
@@ -382,6 +443,16 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
     </div>
   </div>
 </section>
+
+<!-- how many copies -->
+<div class="modal" id="copyModal" hidden>
+  <div class="modalbox">
+    <h2 style="margin-bottom:6px">How many copies?</h2>
+    <p class="lead" style="margin:0 0 20px;max-width:26ch">Each one prints on its own strip.</p>
+    <div class="nums" id="copyNums"></div>
+    <button class="btn alt" id="copyCancel" style="margin-top:18px">Cancel</button>
+  </div>
+</div>
 
 <div class="toast" id="toast"></div>
 

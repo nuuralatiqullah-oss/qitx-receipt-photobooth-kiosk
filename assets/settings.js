@@ -22,6 +22,19 @@
 
   /* ---------- settings ---------- */
 
+  /**
+   * Supabase's dashboard shows several URLs and the REST one is easy to
+   * copy by mistake. supabase-js wants the bare project origin, so trim
+   * anything after it instead of failing with a confusing error.
+   */
+  Settings.cleanUrl = function (raw) {
+    let u = String(raw || "").trim();
+    if (!u) return "";
+    u = u.replace(/\/+$/, "");
+    u = u.replace(/\/(rest|auth|storage|realtime)\/v\d.*$/i, "");
+    return u.replace(/\/+$/, "");
+  };
+
   Settings.overlay = function () {
     try {
       return JSON.parse(localStorage.getItem(KEY) || "{}") || {};
@@ -39,6 +52,7 @@
     Object.keys(over).forEach(k => {
       if (over[k] !== undefined && over[k] !== null) out[k] = over[k];
     });
+    out.SUPABASE_URL = Settings.cleanUrl(out.SUPABASE_URL);
     return out;
   };
 
@@ -152,6 +166,7 @@
       printBlob: (meta && meta.printBlob) || null,  // exact 1-bit print
       frameId: (meta && meta.frameId) || "",
       frameName: (meta && meta.frameName) || "",
+      copies: (meta && meta.copies) || 1,
       remoteUrl: (meta && meta.remoteUrl) || "",
       printed: true,
       shared: false

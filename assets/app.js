@@ -287,11 +287,41 @@
     return grabFrame();
   }
 
-  /** Point the preview box at the slot being filled right now. */
+  /**
+   * Size the preview box to the exact shape of the slot being filled,
+   * as large as the space allows. Done in pixels rather than CSS
+   * because a flex column resolves max-width/max-height before the
+   * aspect ratio, which quietly changes the shape — and then the guest
+   * would be framing something different from what gets printed.
+   */
   function applySlotShape() {
+    if (!state.frame || !state.frame.slots.length) return;
     const i = Math.min(state.shots.length, state.frame.slots.length - 1);
-    $("stage").style.setProperty("--slot-ar", String(slotAspect(i)));
+    const ar = slotAspect(i);
+    const stage = $("stage");
+    const wrap = $("stageWrap");
+    stage.style.setProperty("--slot-ar", String(ar));
+
+    const availW = wrap.clientWidth;
+    const availH = wrap.clientHeight;
+    if (!availW || !availH) return;
+
+    let w = availW, h = w / ar;
+    if (h > availH) { h = availH; w = h * ar; }
+    stage.style.width = Math.floor(w) + "px";
+    stage.style.height = Math.floor(h) + "px";
   }
+
+  // keep it correct through rotation and the phone's URL bar appearing
+  let shapeTimer = null;
+  function reshapeSoon() {
+    clearTimeout(shapeTimer);
+    shapeTimer = setTimeout(function () {
+      if ($("scrCapture").classList.contains("active")) applySlotShape();
+    }, 80);
+  }
+  window.addEventListener("resize", reshapeSoon);
+  window.addEventListener("orientationchange", reshapeSoon);
 
   /** Little strip showing filled slots and the one being shot. */
   function paintMiniStrip() {
@@ -493,16 +523,53 @@
     await saveStrip();
   }
 
+  /**
+   * Ask how many copies. Resolves with a number, or 0 if cancelled.
+   * Skipped entirely when ASK_COPIES is off.
+   */
+  function askCopies() {
+    const max = Math.max(1, Math.min(9, CFG.MAX_COPIES || 5));
+    if (CFG.ASK_COPIES === false || max === 1) {
+      return Promise.resolve(Math.max(1, CFG.AUTO_PRINT_COPIES || 1));
+    }
+    return new Promise(function (resolve) {
+      const modal = $("copyModal");
+      const nums = $("copyNums");
+      nums.innerHTML = "";
+
+      const close = function (n) {
+        modal.hidden = true;
+        nums.innerHTML = "";
+        $("copyCancel").onclick = null;
+        resolve(n);
+      };
+
+      for (let i = 1; i <= max; i++) {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = String(i);
+        b.setAttribute("aria-label", i + (i === 1 ? " copy" : " copies"));
+        b.onclick = () => close(i);
+        nums.appendChild(b);
+      }
+      $("copyCancel").onclick = () => close(0);
+      modal.hidden = false;
+    });
+  }
+
   async function doPrint() {
     if (!window.Printer.isConnected()) {
       toast("Connect the printer first — tap the Printer button", true);
       return;
     }
+    const copies = await askCopies();
+    if (!copies) return;          // cancelled, stay on the review screen
+
     show("scrPrinting");
     try {
-      for (let i = 0; i < Math.max(1, CFG.AUTO_PRINT_COPIES); i++) {
+      for (let i = 0; i < copies; i++) {
         $("printingMsg").textContent =
-          CFG.AUTO_PRINT_COPIES > 1 ? "PRINTING " + (i + 1) + " / " + CFG.AUTO_PRINT_COPIES : "PRINTING…";
+          copies > 1 ? "Printing " + (i + 1) + " of " + copies : "Printing…";
         await window.Printer.print(state.prepared, {
           bandRows: CFG.RASTER_BAND_ROWS,
           chunkBytes: CFG.USB_CHUNK_BYTES,
@@ -512,7 +579,7 @@
           speed: CFG.PRINT_SPEED
         });
       }
-      await finishSession();
+      await finishSession(copies);
       show("scrDone");
     } catch (e) {
       toast("Print failed: " + e.message, true);
@@ -537,7 +604,7 @@
 
   /* Keep a copy on the tablet so Admin can reprint or share it later,
      with or without internet. Trimmed to KEEP_LOCAL_COPIES. */
-  async function saveLocalCopy(remoteUrl) {
+  async function saveLocalCopy(remoteUrl, copies) {
     if (!window.Settings || !state.sheet) return;
     if (!state.shots.length) return;   // a reprint is already saved
     try {
@@ -548,6 +615,7 @@
         window.Imaging.bitsToCanvas(state.prepared), "image/png");
       await window.Settings.addPrint(blob, {
         printBlob: printBlob,
+        copies: Math.max(1, copies || 1),
         frameId: String(state.frame.id),
         frameName: state.frame.name,
         remoteUrl: remoteUrl || ""
@@ -557,12 +625,12 @@
     }
   }
 
-  async function finishSession() {
+  async function finishSession(copies) {
     $("qrBox").style.display = "none";
     state.guestUrl = null;
 
     if (!supabase || !CFG.UPLOAD_PHOTOS) {
-      await saveLocalCopy("");
+      await saveLocalCopy("", copies);
       $("doneLead").textContent = "Collect your print from the printer";
       return;
     }
@@ -585,11 +653,11 @@
         session_id: state.sessionId,
         frame_id: String(state.frame.id),
         storage_path: path,
-        copies: Math.max(1, CFG.AUTO_PRINT_COPIES)
+        copies: Math.max(1, copies || 1)
       });
       if (ins.error) console.warn("prints insert:", ins.error.message);
 
-      await saveLocalCopy(state.guestUrl);
+      await saveLocalCopy(state.guestUrl, copies);
 
       if (CFG.SHOW_QR && state.guestUrl && window.QRCode) {
         await window.QRCode.toCanvas($("qrCanvas"), state.guestUrl, { width: 200, margin: 1 });
@@ -600,7 +668,7 @@
       }
     } catch (e) {
       console.warn("Upload failed:", e.message);
-      await saveLocalCopy("");
+      await saveLocalCopy("", copies);
       $("doneLead").textContent = "Collect your print from the printer";
     }
   }

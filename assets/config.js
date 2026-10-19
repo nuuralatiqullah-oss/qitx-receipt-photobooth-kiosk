@@ -21,8 +21,8 @@ window.CONFIG = {
   /* ---- Supabase (leave blank to run fully offline) ----
      Project Settings -> Data API for the URL,
      Project Settings -> API Keys for the PUBLISHABLE key. */
-  SUPABASE_URL: "",
-  SUPABASE_ANON_KEY: "",
+  SUPABASE_URL: "https://wudqimkxqsylvakiuwuz.supabase.co",
+  SUPABASE_ANON_KEY: "sb_publishable__BGdeh4R0ZJDhGAAX84fAg_c43DgV4v",
   PHOTO_BUCKET: "booth-photos",
   FRAME_BUCKET: "booth-frames",
 
@@ -86,6 +86,10 @@ window.CONFIG = {
 
   /* ---- Booth behaviour (editable in Admin) ---- */
   DEFAULT_FRAME: "",         // frame id to preselect, "" = let guests choose
+  /* Ask the guest how many copies when they tap Print.
+     Off = print AUTO_PRINT_COPIES straight away. */
+  ASK_COPIES: true,
+  MAX_COPIES: 5,
   AUTO_PRINT_COPIES: 1,
   IDLE_RESET_SECONDS: 90,
   ALLOW_GUEST_PRINT: true,   // false = staff prints from Admin instead
