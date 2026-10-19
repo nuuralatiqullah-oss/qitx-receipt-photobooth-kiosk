@@ -96,19 +96,22 @@ digital copy.
 
 ### Turning the QR on
 
-Credentials for the `wudqimkxqsylvakiuwuz` project are already in
-`assets/config.js`. A publishable key is designed to sit in public
-client code — **but only because Row Level Security is on**, so step 1
-is not optional.
+Credentials for the `wudqimkxqsylvakiuwuz` project are hardcoded in
+`assets/config.js` and are **not editable from Admin** — a value saved
+on a tablet once kept overriding later fixes, so the tablet copy is
+ignored and purged. To point at a different project, edit config.js and
+redeploy.
+
+A publishable key is designed to sit in public client code — **but only
+because Row Level Security is on**, so step 1 below is not optional.
 
 1. In your Supabase project, **SQL Editor** → paste all of
    `supabase-setup.sql` → Run. Safe to re-run.
 2. **Project Settings → Data API** → copy the Project URL.
    **Project Settings → API Keys** → copy the **publishable** key
    (`sb_publishable_…`). Never the secret one — this is a public repo.
-3. **Admin → Printer → Supabase** → **Test connection**. (The keys are
-   already filled in; paste over them to use a different project. A
-   REST endpoint ending `/rest/v1/` is trimmed for you.)
+3. **Admin → Printer → Supabase → Test connection.** The fields are
+   read-only; they show what the booth is actually using.
 
 The test walks the same path the booth takes when it prints: it uploads
 a file, reads it back over the public URL, writes a row to `prints`,
@@ -149,7 +152,7 @@ password you care about.
 
 Guests are asked how many copies when they tap Print, up to 5. Turn
 that off under **Camera** to print a fixed number instead.
-| Printer | Test prints, paper width, cut, dot size, dithering, speed and density, Supabase |
+| Printer | Test prints, paper width, cut, dot size, dithering, speed and density, Supabase status |
 
 Everything saves to the tablet and overrides `assets/config.js`. The
 booth picks changes up on its next load. **Reset all settings** on the

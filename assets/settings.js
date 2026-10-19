@@ -52,15 +52,37 @@
     Object.keys(over).forEach(k => {
       if (over[k] !== undefined && over[k] !== null) out[k] = over[k];
     });
-    out.SUPABASE_URL = Settings.cleanUrl(out.SUPABASE_URL);
+    /* Supabase is hardcoded in config.js and deliberately NOT
+       overridable from the tablet. A value saved here once before
+       outlived every later fix and kept breaking uploads, so the
+       overlay is ignored and purged instead. */
+    out.SUPABASE_URL = Settings.cleanUrl(base.SUPABASE_URL);
+    out.SUPABASE_ANON_KEY = String(base.SUPABASE_ANON_KEY || "").trim();
+    purgeSupabaseOverride(over);
     return out;
   };
+
+  /** Drop any Supabase values left in the overlay by an older build. */
+  function purgeSupabaseOverride(over) {
+    if (!("SUPABASE_URL" in over) && !("SUPABASE_ANON_KEY" in over)) return;
+    try {
+      delete over.SUPABASE_URL;
+      delete over.SUPABASE_ANON_KEY;
+      localStorage.setItem(KEY, JSON.stringify(over));
+    } catch (e) {
+      /* storage blocked — the values are ignored either way */
+    }
+  }
 
   /** Merge a partial change into the overlay. Returns true on success. */
   Settings.save = function (partial) {
     try {
       const over = Settings.overlay();
-      Object.keys(partial).forEach(k => { over[k] = partial[k]; });
+      Object.keys(partial).forEach(function (k) {
+        // hardcoded in config.js; never stored per-tablet
+        if (k === "SUPABASE_URL" || k === "SUPABASE_ANON_KEY") return;
+        over[k] = partial[k];
+      });
       localStorage.setItem(KEY, JSON.stringify(over));
       return true;
     } catch (e) {

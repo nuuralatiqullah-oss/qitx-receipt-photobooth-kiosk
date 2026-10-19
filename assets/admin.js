@@ -13,7 +13,6 @@
   const FIELDS = {
     BOOTH_NAME: "text", EVENT_NAME: "text", TAGLINE: "text",
     START_LABEL: "text", FOOTER_LINE: "text", ADMIN_PIN: "text",
-    SUPABASE_URL: "text", SUPABASE_ANON_KEY: "text",
     CAMERA_FACING: "text", DITHER: "text", CUT_MODE: "text", ORIENTATION: "text",
     PRINT_WIDTH_DOTS: "int", FEED_BEFORE_CUT: "int",
     PHOTO_DOT_SIZE: "int", COUNTDOWN_SECONDS: "int",
@@ -65,6 +64,9 @@
 
   function fill() {
     const cfg = window.Settings.load();
+    // read-only: these come from config.js, not the tablet
+    $("f_SUPABASE_URL").value = tidyUrl(cfg.SUPABASE_URL);
+    $("f_SUPABASE_ANON_KEY").value = String(cfg.SUPABASE_ANON_KEY || "");
     Object.keys(FIELDS).forEach(function (k) {
       const el = $("f_" + k);
       if (!el) return;
@@ -579,14 +581,13 @@
     const cfg = window.Settings.load();
     const url = tidyUrl(cfg.SUPABASE_URL);
     const key = String(cfg.SUPABASE_ANON_KEY || "").trim();
-    $("f_SUPABASE_URL").value = url;   // show what is actually being used
 
     const say = (msg, ok) => {
       el.textContent = msg;
       el.style.color = ok ? "var(--jade)" : "var(--punch)";
     };
 
-    if (!url || !key) { say("Fill in both fields and Save first", false); return; }
+    if (!url || !key) { say("No project configured in config.js", false); return; }
     if (!/^https:\/\/.+\.supabase\.co/.test(url)) {
       say("That URL doesn't look like a Supabase project URL", false); return;
     }

@@ -322,15 +322,14 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
       </div>
       <div class="box">
         <h2>Supabase</h2>
-        <p class="note">Optional. Without it the booth still captures and prints — it just won't upload or show a QR code. Use the publishable key, never the secret one.</p>
-        <label><span class="lb">Project URL</span><input type="text" id="f_SUPABASE_URL" placeholder="https://xxxx.supabase.co"></label>
-        <label><span class="lb">Publishable key</span><input type="text" id="f_SUPABASE_ANON_KEY" placeholder="sb_publishable_..."></label>
+        <p class="note">Set in <code>assets/config.js</code> and shown here so you can check it. Not editable on the tablet — a value saved here once kept overriding later fixes. To point at a different project, change config.js and redeploy.</p>
+        <label><span class="lb">Project URL</span><input type="text" id="f_SUPABASE_URL" readonly style="background:var(--wash);color:var(--ink-soft)"></label>
+        <label><span class="lb">Publishable key</span><input type="text" id="f_SUPABASE_ANON_KEY" readonly style="background:var(--wash);color:var(--ink-soft)"></label>
         <div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">
           <button class="btn alt sm" id="btnTestSupa">Test connection</button>
           <span id="supaState" style="font-size:13.5px;color:var(--ink-soft)">Not tested</span>
         </div>
-        <p class="note" style="margin:14px 0 0">
-          Save first, then test. The test checks the keys, the photo
+        <p class="note" style="margin:14px 0 0"> The test checks the keys, the photo
           bucket and the prints table, and tells you which step is
           missing. Once it passes, guests get a QR code to download
           their strip.
