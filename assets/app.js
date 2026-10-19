@@ -802,8 +802,16 @@
     if (window.Settings) window.Settings.applyOrientation();
     wire();
 
-    if (CFG.SUPABASE_URL && CFG.SUPABASE_ANON_KEY && window.supabase) {
-      supabase = window.supabase.createClient(CFG.SUPABASE_URL, CFG.SUPABASE_ANON_KEY, {
+    // Trim a REST/storage endpoint down to the project origin — the
+    // dashboard makes that URL easy to copy, and supabase-js needs the
+    // bare origin or every request 404s on an invalid path.
+    const sbUrl = String(CFG.SUPABASE_URL || "").trim()
+      .replace(/\/+$/, "")
+      .replace(/\/(rest|auth|storage|realtime)\/v\d.*$/i, "")
+      .replace(/\/+$/, "");
+
+    if (sbUrl && CFG.SUPABASE_ANON_KEY && window.supabase) {
+      supabase = window.supabase.createClient(sbUrl, CFG.SUPABASE_ANON_KEY, {
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       });
     }

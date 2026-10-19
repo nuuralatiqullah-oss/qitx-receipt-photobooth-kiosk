@@ -26,6 +26,17 @@
     ALLOW_GUEST_PRINT: "bool", UPLOAD_PHOTOS: "bool", SHOW_QR: "bool"
   };
 
+  /* Trim a pasted REST/auth/storage endpoint down to the project
+     origin. Defined locally as well as in settings.js so a stale
+     cached copy of that file can't reintroduce a malformed URL. */
+  function tidyUrl(raw) {
+    let u = String(raw == null ? "" : raw).trim();
+    if (!u) return "";
+    u = u.replace(/\/+$/, "");
+    u = u.replace(/\/(rest|auth|storage|realtime)\/v\d.*$/i, "");
+    return u.replace(/\/+$/, "");
+  }
+
   function toast(msg, isError) {
     const t = $("toast");
     t.textContent = msg;
@@ -60,6 +71,7 @@
       const v = cfg[k];
       if (FIELDS[k] === "bool") el.checked = !!v;
       else if (v === null || v === undefined) el.value = "";
+      else if (k === "SUPABASE_URL") el.value = tidyUrl(v);
       else el.value = String(v);
     });
   }
@@ -92,6 +104,7 @@
       }
       out[k] = raw;
     });
+    if (out.SUPABASE_URL) out.SUPABASE_URL = tidyUrl(out.SUPABASE_URL);
     return { values: out, bad: bad };
   }
 
@@ -564,8 +577,9 @@
   async function testSupabase(btn) {
     const el = $("supaState");
     const cfg = window.Settings.load();
-    const url = String(cfg.SUPABASE_URL || "").trim();
+    const url = tidyUrl(cfg.SUPABASE_URL);
     const key = String(cfg.SUPABASE_ANON_KEY || "").trim();
+    $("f_SUPABASE_URL").value = url;   // show what is actually being used
 
     const say = (msg, ok) => {
       el.textContent = msg;
@@ -588,11 +602,23 @@
         auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false }
       });
 
-      const path = "_connftest/" + Date.now() + ".txt";
+      const path = "connection-test/" + Date.now() + ".txt";
       const up = await sb.storage.from(cfg.PHOTO_BUCKET)
         .upload(path, new Blob(["ok"], { type: "text/plain" }), { contentType: "text/plain" });
       if (up.error) {
-        say('Upload failed: ' + up.error.message + ' — run supabase-setup.sql', false);
+        const m = String(up.error.message || "");
+        // Name the likely cause rather than echoing a bare API error.
+        let hint;
+        if (/bucket.*not.*found|not.*found.*bucket/i.test(m)) {
+          hint = 'the "' + cfg.PHOTO_BUCKET + '" bucket does not exist — run supabase-setup.sql';
+        } else if (/invalid path|not found/i.test(m)) {
+          hint = "the project URL looks wrong. Using: " + url;
+        } else if (/row-level security|policy|unauthor|permission/i.test(m)) {
+          hint = "the upload policy is missing — run supabase-setup.sql";
+        } else {
+          hint = m;
+        }
+        say("Upload failed — " + hint, false);
         return;
       }
 
