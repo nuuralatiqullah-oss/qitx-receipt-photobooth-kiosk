@@ -81,6 +81,24 @@ Designing one:
 Templates are stored on the tablet, so they work offline, and they are
 deleted along with the layout.
 
+## When the QR appears
+
+On the **last screen, after the strip has printed** — not before. The
+sequence is: print finishes → the colour copy uploads to Supabase →
+the QR is drawn from that photo's public link → the Done screen shows
+it with "Scan the code to keep a digital copy".
+
+It is skipped, silently, if any of these is true:
+
+- Supabase isn't reachable or the upload failed
+- `supabase-setup.sql` hasn't been run, so the bucket or policy is missing
+- **Upload to Supabase** or **Show a QR code** is off (Admin → Camera)
+- The printer failed, so the session never reached the Done screen
+
+When it's skipped the Done screen says "Collect your print from the
+printer" instead. Check it with **Admin → Printer → Supabase → Test
+connection**, which names whichever step is missing.
+
 ## Getting photos to guests
 
 | Way | Good for | Needs |
@@ -129,8 +147,9 @@ themselves in the preview gets precisely that on paper — nothing is
 trimmed afterwards.
 
 Because slots in one layout can differ (Big Duo has a square and a
-4:3), the preview changes shape between shots. The little strip beside
-it shows which slot is being filled and what is already in the others.
+4:3), the preview changes shape between shots. The thumbnail row under
+the preview shows the shots taken so far, with the one being taken now
+outlined.
 
 In landscape the strip sits to the left of the preview with the button
 on the right; in portrait they stack. Both are tested at the Redmi Pad

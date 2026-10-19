@@ -221,6 +221,7 @@
     };
     state.stream = await navigator.mediaDevices.getUserMedia(constraints);
     const v = $("video");
+    v.addEventListener("loadedmetadata", applySlotShape, { once: true });
     v.srcObject = state.stream;
     v.classList.toggle("mirror", CFG.MIRROR_PREVIEW && state.facing === "user");
     await v.play();
@@ -296,6 +297,7 @@
    */
   function applySlotShape() {
     if (!state.frame || !state.frame.slots.length) return;
+    if (!$("scrCapture").classList.contains("active")) return;
     const i = Math.min(state.shots.length, state.frame.slots.length - 1);
     const ar = slotAspect(i);
     const stage = $("stage");
@@ -323,53 +325,25 @@
   window.addEventListener("resize", reshapeSoon);
   window.addEventListener("orientationchange", reshapeSoon);
 
-  /** Little strip showing filled slots and the one being shot. */
-  function paintMiniStrip() {
-    const el = $("miniStrip");
-    const f = state.frame;
-    if (!f || !f.slots.length) { el.hidden = true; return; }
-    el.hidden = false;
-    el.innerHTML = "";
-
-    const head = document.createElement("b");
-    head.textContent = CFG.BOOTH_NAME || "";
-    el.appendChild(head);
-
-    const inner = 74 - 12 - 5;   // box width minus padding and borders
-    const k = inner / f.width;
-    f.slots.forEach(function (s, i) {
-      const cell = document.createElement("s");
-      cell.style.width = Math.round(s.w * k) + "px";
-      cell.style.height = Math.round(s.h * k) + "px";
-      cell.style.alignSelf = "center";
-      if (state.shots[i]) {
-        const img = document.createElement("img");
-        img.src = state.shots[i].toDataURL("image/jpeg", 0.5);
-        cell.appendChild(img);
-      } else if (i === state.shots.length) {
-        cell.className = "now";
-      }
-      el.appendChild(cell);
-    });
-  }
-
   function paintShots() {
     const wrap = $("shots");
     wrap.innerHTML = "";
     for (let i = 0; i < state.frame.shots; i++) {
       const d = document.createElement("div");
-      d.className = "thumb" + (state.shots[i] ? " done" : "");
       if (state.shots[i]) {
+        d.className = "thumb done";
         const img = new Image();
         img.src = state.shots[i].toDataURL("image/jpeg", 0.6);
         d.appendChild(img);
+      } else {
+        // the one being taken right now, so guests can see where they are
+        d.className = "thumb" + (i === state.shots.length ? " now" : "");
       }
       wrap.appendChild(d);
     }
     $("captureCount").textContent =
       Math.min(state.shots.length + 1, state.frame.shots) + " / " + state.frame.shots;
     applySlotShape();
-    paintMiniStrip();
   }
 
   function countdown(seconds) {
@@ -700,8 +674,12 @@
     paintShots();
     $("captureHint").textContent = "Tap the button when ready";
     show("scrCapture");
+    // The screen must be on-screen before the preview can be sized: a
+    // hidden element measures zero and the sizing silently gives up.
+    requestAnimationFrame(applySlotShape);
     try {
       await startCamera();
+      applySlotShape();
     } catch (e) {
       toast("Camera blocked: " + e.message, true);
       show("scrFrames");

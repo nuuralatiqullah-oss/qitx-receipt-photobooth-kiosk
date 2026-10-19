@@ -87,11 +87,11 @@ header{
 
 h1{
   font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;font-weight:600;
-  font-size:clamp(38px,8.5vw,68px);line-height:.98;letter-spacing:-.02em;
-  margin:0 0 10px;max-width:14ch;
+  font-size:clamp(30px,6.6vw,56px);line-height:1.02;letter-spacing:-.02em;
+  margin:0 0 8px;max-width:16ch;
 }
 h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;font-weight:500;font-size:25px;margin:0 0 14px}
-.lead{color:var(--ink-soft);font-size:16px;line-height:1.55;max-width:30ch;margin:0 auto 26px}
+.lead{color:var(--ink-soft);font-size:15.5px;line-height:1.5;max-width:30ch;margin:0 auto 20px}
 
 /* sticker buttons */
 .btn{
@@ -117,10 +117,10 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 .strip{
   position:relative;background:var(--paper);
   border:2.5px solid var(--ink);border-radius:8px;
-  padding:12px 12px 18px;width:min(188px,44vw);
+  padding:9px 9px 14px;width:min(124px,27vw);
   box-shadow:7px 7px 0 var(--ink);transform:rotate(-2.5deg);
 }
-.strip i{display:block;background:var(--wash);border:2px solid var(--ink);border-radius:4px;aspect-ratio:4/3;margin-bottom:9px}
+.strip i{display:block;background:var(--wash);border:2px solid var(--ink);border-radius:4px;aspect-ratio:4/3;margin-bottom:6px}
 .strip i:nth-child(1){background:var(--mango)}
 .strip i:nth-child(2){background:var(--sky)}
 .strip i:nth-child(3){background:var(--punch);margin-bottom:0}
@@ -168,7 +168,13 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
    slot. CSS alone can't guarantee that: in a flex column the ratio
    loses to whichever max- constraint bites first. */
 .stagewrap{
-  flex:1 1 auto;min-width:0;min-height:0;
+  /* basis 0, never auto: with auto the wrapper sizes to the preview it
+     contains, and since the app sizes the preview from the wrapper
+     they feed each other and the box creeps off the screen. */
+  flex:1 1 0;min-width:0;min-height:0;
+  /* stretch, or in a row the wrapper's height collapses around the
+     preview it contains and the preview shrinks to match it */
+  align-self:stretch;
   display:flex;align-items:center;justify-content:center;
 }
 .stage{
@@ -179,32 +185,6 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 }
 #video{width:100%;height:100%;object-fit:cover;display:block}
 #video.mirror{transform:scaleX(-1)}
-
-/* live strip: filled slots plus the one being shot now */
-.ministrip{
-  flex:0 0 auto;width:74px;background:var(--paper);
-  border:2.5px solid var(--ink);border-radius:8px;
-  padding:6px;display:flex;flex-direction:column;gap:5px;
-  box-shadow:3px 3px 0 var(--ink);max-height:100%;overflow:hidden;
-}
-.ministrip b{
-  display:block;font-size:7.5px;font-weight:700;text-align:center;
-  letter-spacing:.03em;color:var(--ink);line-height:1.1;
-}
-.ministrip s{display:block;background:var(--wash);border:1.5px solid var(--ink);border-radius:3px;overflow:hidden;position:relative;flex:0 0 auto}
-.ministrip s img{width:100%;height:100%;object-fit:cover;display:block}
-/* the slot being shot right now: outlined, not filled, so it doesn't
-   look like a photo is already in it */
-.ministrip s.now{
-  border:2px dashed var(--punch);background:var(--paper);
-  animation:pulse 1.6s ease-in-out infinite;
-}
-.ministrip s.now::after{
-  content:"";position:absolute;left:50%;top:50%;
-  width:7px;height:7px;margin:-3.5px 0 0 -3.5px;
-  border-radius:50%;background:var(--punch);
-}
-@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 
 .capside{flex:0 0 auto;display:flex;flex-direction:column;align-items:center;gap:12px}
 .capside .btn{white-space:nowrap}
@@ -218,9 +198,23 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 .flash.fire{animation:fl .45s ease-out}
 @keyframes fl{from{opacity:.95}to{opacity:0}}
 .shots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
-.thumb{width:40px;height:54px;border-radius:7px;border:2.5px solid var(--line);background:var(--wash);overflow:hidden}
+.thumb{
+  width:44px;height:58px;border-radius:8px;position:relative;overflow:hidden;
+  border:2.5px solid var(--line);background:var(--wash);
+}
 .thumb img{width:100%;height:100%;object-fit:cover;display:block}
 .thumb.done{border-color:var(--ink)}
+/* the shot being taken now: outlined, so it doesn't read as filled */
+.thumb.now{
+  border:2.5px dashed var(--punch);background:var(--paper);
+  animation:pulse 1.6s ease-in-out infinite;
+}
+.thumb.now::after{
+  content:"";position:absolute;left:50%;top:50%;
+  width:9px;height:9px;margin:-4.5px 0 0 -4.5px;
+  border-radius:50%;background:var(--punch);
+}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.45}}
 .hint{
   position:absolute;top:14px;left:50%;transform:translateX(-50%);
   background:var(--paper);border:2px solid var(--ink);border-radius:999px;
@@ -296,11 +290,6 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
     justify-content:center;align-items:center;
     gap:10px;overflow:hidden;
   }
-  .ministrip{
-    flex:0 0 auto;flex-direction:row;align-items:center;
-    width:auto;max-width:100%;gap:4px;
-  }
-  .ministrip b{display:none}
   .stagewrap{flex:1 1 0;width:100%}
   .capside{flex:0 0 auto;width:100%;align-items:center}
   .capside .btn{width:100%;max-width:430px}
@@ -310,7 +299,6 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
    the extras rather than shrinking the button. */
 @media (orientation:portrait) and (max-height:700px){
   .capwrap{gap:8px;padding:2px 12px 8px}
-  .ministrip{display:none}
   .shots{display:none}
   .btn{padding:14px 26px;min-height:54px}
   header{padding:8px 16px}
@@ -347,7 +335,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
   <div class="body">
     <div class="center">
       <div class="strip" aria-hidden="true"><i></i><i></i><i></i></div>
-      <h1 id="welcomeTitle" style="margin-top:26px">Say cheese</h1>
+      <h1 id="welcomeTitle" style="margin-top:20px">Say cheese</h1>
       <p class="lead" id="welcomeLead"></p>
       <button class="btn go" id="btnStart">Start</button>
     </div>
@@ -373,11 +361,10 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
     <button class="chip" id="btnFlip">Flip</button>
   </header>
   <div class="capwrap">
-    <div class="ministrip" id="miniStrip" aria-hidden="true"></div>
     <div class="stagewrap" id="stageWrap">
       <div class="stage" id="stage">
         <video id="video" playsinline autoplay muted></video>
-        <div class="hint" id="captureHint">Tap when you're ready</div>
+        <div class="hint" id="captureHint">Tap the button when ready</div>
         <div class="count" id="countdown">3</div>
         <div class="flash" id="flash"></div>
       </div>
