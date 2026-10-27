@@ -155,6 +155,37 @@ In landscape the strip sits to the left of the preview with the button
 on the right; in portrait they stack. Both are tested at the Redmi Pad
 2's resolution.
 
+## Remote shutter
+
+A Bluetooth selfie remote, keyboard or foot pedal can fire the shutter:
+they are all HID keyboards underneath, so whatever key they send
+arrives as a normal keypress. Defaults are Enter, Space and the numpad
+Enter. **Admin → Remote** shows what yours actually sends and can learn
+it with one press.
+
+A remote press does whatever the current screen's main button does, so
+one button runs a whole session: Start → choose layout → shoot → print.
+
+**The volume keys cannot be used.** Android handles them in the OS and
+never passes them to a web page — there is no API for it, in any
+browser, and no workaround from a website. If your remote only sends
+Volume Up:
+
+1. **Look for an iOS/Android switch on it.** Most have one. Android
+   mode sends Volume Up; iOS mode usually sends Enter, which works.
+   Flip it, re-pair, press again.
+2. Otherwise use a small Bluetooth keyboard, numeric keypad or USB foot
+   pedal — they all send real keys.
+3. Or skip the remote: turn on **Take all photos in one go** under
+   Admin → Remote, and a single tap runs the whole session with a pause
+   between poses.
+
+Media keys (play / pause / next) are also accepted. Android only routes
+those to a page that is playing something, so the booth loops a silent
+clip to hold a media session open.
+
+Presses inside 600ms of each other count once — these remotes bounce.
+
 ## Admin
 
 Tap **Admin** on the welcome screen. Default PIN is `1234`; change it on
@@ -167,6 +198,7 @@ password you care about.
 | Text | Booth name, event name, welcome line, printed footer, PIN |
 | Layouts | Turn layouts on or off, add your own, delete yours |
 | Photos | Recent strips kept on the tablet — reprint, share, delete |
+| Remote | What your remote sends, shutter keys, hands-free mode |
 | Camera | Screen orientation, front/rear, mirror, capture width, countdown, copies, idle reset |
 
 Guests are asked how many copies when they tap Print, up to 5. Turn

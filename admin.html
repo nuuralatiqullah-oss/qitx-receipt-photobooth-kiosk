@@ -119,6 +119,7 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
     <button class="tab" data-p="tpl">Layouts</button>
     <button class="tab" data-p="photos">Photos</button>
     <button class="tab" data-p="camera">Camera</button>
+    <button class="tab" data-p="remote">Remote</button>
     <button class="tab" data-p="printer">Printer</button>
   </div>
 
@@ -249,6 +250,60 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
       </div>
     </section>
 
+    <!-- REMOTE -->
+    <section class="panel" data-p="remote">
+      <div class="box">
+        <h2>What is your remote sending?</h2>
+        <p class="note">Press the button on your remote and watch below. Whatever it sends appears here — if nothing appears, the page can't see it.</p>
+        <div style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px">
+          <button class="btn go" id="btnListen">Start listening</button>
+          <button class="btn alt sm" id="btnLearn">Use the next press as the shutter</button>
+          <button class="btn alt sm" id="btnClearLog">Clear</button>
+        </div>
+        <div id="rlog" style="font-family:ui-monospace,monospace;font-size:12.5px;line-height:1.7;
+          background:var(--wash);border:2px solid var(--line);border-radius:11px;
+          padding:12px;height:190px;overflow:auto">Not listening yet.</div>
+      </div>
+
+      <div class="box">
+        <h2>If nothing shows up</h2>
+        <p class="note" style="margin-bottom:12px">
+          Almost certainly your remote is sending <b>Volume Up</b>. Android
+          handles the volume keys itself and never passes them to a web
+          page — there is no way around that from a website, in any
+          browser. Two things that do work:
+        </p>
+        <p class="note" style="margin:0">
+          <b>1. Look for an iOS/Android switch on the remote.</b> Most of
+          these have one, on the side or underneath. Android mode sends
+          Volume Up; <b>iOS mode usually sends Enter</b>, which this page
+          can see. Flip it, re-pair, and press again.<br><br>
+          <b>2. Otherwise, use a different remote.</b> Any small Bluetooth
+          keyboard, numeric keypad or USB foot pedal works — they all send
+          real keys.<br><br>
+          <b>Or skip the remote:</b> turn on "Take all photos in one go"
+          below and a single tap runs the whole session.
+        </p>
+      </div>
+
+      <div class="box">
+        <h2>Shutter</h2>
+        <div class="check"><input type="checkbox" id="f_REMOTE_SHUTTER"><span>Let a remote or keyboard fire the shutter</span></div>
+        <div class="check"><input type="checkbox" id="f_SHUTTER_MEDIA_KEYS"><span>Also accept media keys (play / pause / next)</span></div>
+        <div class="check"><input type="checkbox" id="f_SHUTTER_ANY_KEY"><span>Accept <b>any</b> key — easiest, but a stray keypress also shoots</span></div>
+        <label><span class="lb">Keys that fire the shutter</span>
+          <input type="text" id="f_SHUTTER_KEYS" placeholder="Enter, Space">
+          <span class="hint">Comma separated. Use "Use the next press as the shutter" above to fill this from the remote itself.</span></label>
+      </div>
+
+      <div class="box">
+        <h2>Hands-free</h2>
+        <div class="check"><input type="checkbox" id="f_AUTO_SEQUENCE"><span>Take all photos in one go</span></div>
+        <label><span class="lb">Pause between shots (seconds)</span><input type="number" id="f_AUTO_SEQUENCE_GAP" min="0" max="15">
+          <span class="hint">Time to change pose. The countdown runs on top of this.</span></label>
+      </div>
+    </section>
+
     <!-- PRINTER -->
     <section class="panel" data-p="printer">
       <div class="box">
@@ -356,6 +411,7 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="assets/imaging.js"></script>
 <script src="assets/printer.js"></script>
+<script src="assets/remote.js"></script>
 <script src="assets/admin.js"></script>
 <script>
 if ("serviceWorker" in navigator) {

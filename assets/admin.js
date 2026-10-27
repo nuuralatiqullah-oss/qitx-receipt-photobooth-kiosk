@@ -18,7 +18,9 @@
     PHOTO_DOT_SIZE: "int", COUNTDOWN_SECONDS: "int",
     AUTO_PRINT_COPIES: "int", IDLE_RESET_SECONDS: "int",
     KEEP_LOCAL_COPIES: "int", CAMERA_IDEAL_WIDTH: "int", MAX_COPIES: "int",
-    ASK_COPIES: "bool",
+    ASK_COPIES: "bool", AUTO_SEQUENCE: "bool", AUTO_SEQUENCE_GAP: "int",
+    REMOTE_SHUTTER: "bool", SHUTTER_MEDIA_KEYS: "bool", SHUTTER_ANY_KEY: "bool",
+    SHUTTER_KEYS: "list",
     PRINT_SPEED: "intOrNull", PRINT_DENSITY: "intOrNull",
     PHOTO_GAMMA: "float", PHOTO_LOCAL_CONTRAST: "float", PHOTO_SHARPEN: "float",
     MIRROR_PREVIEW: "bool", PHOTO_AUTO_LEVELS: "bool",
@@ -71,6 +73,7 @@
       const el = $("f_" + k);
       if (!el) return;
       const v = cfg[k];
+      if (FIELDS[k] === "list") { el.value = (v || []).join(", "); return; }
       if (FIELDS[k] === "bool") el.checked = !!v;
       else if (v === null || v === undefined) el.value = "";
       else if (k === "SUPABASE_URL") el.value = tidyUrl(v);
@@ -96,6 +99,10 @@
         const n = parseInt(raw, 10);
         if (isNaN(n)) { bad = bad || k; return; }
         out[k] = n;
+        return;
+      }
+      if (kind === "list") {
+        out[k] = raw.split(",").map(x => x.trim()).filter(Boolean);
         return;
       }
       if (kind === "float") {
@@ -653,11 +660,72 @@
     }
   }
 
+  /* ---------- remote diagnostic ---------- */
+
+  let listening = false;
+  let learning = false;
+  let lines = 0;
+
+  function logLine(text, strong) {
+    const box = $("rlog");
+    if (lines === 0) box.textContent = "";
+    lines++;
+    const row = document.createElement("div");
+    const t = new Date().toLocaleTimeString();
+    row.textContent = t + "   " + text;
+    if (strong) { row.style.color = "var(--jade)"; row.style.fontWeight = "700"; }
+    box.appendChild(row);
+    box.scrollTop = box.scrollHeight;
+    if (lines > 200) { box.removeChild(box.firstChild); lines--; }
+  }
+
+  function startListening(btn) {
+    if (!window.Remote) { logLine("remote.js didn't load"); return; }
+    if (listening) {
+      window.Remote.stop();
+      listening = false;
+      btn.textContent = "Start listening";
+      btn.className = "btn go";
+      logLine("Stopped.");
+      return;
+    }
+    listening = true;
+    btn.textContent = "Stop listening";
+    btn.className = "btn warn";
+    lines = 0;
+    $("rlog").textContent = "";
+    logLine("Listening. Press your remote now.");
+
+    window.Remote.enabled = false;          // diagnose, don't shoot
+    window.Remote.onEvent = function (kind, detail) {
+      if (kind === "key" && learning) {
+        const m = /^(.+?)\s+\(code (.+?),/.exec(detail);
+        const key = m ? (m[2] && m[2] !== "" ? m[2] : m[1]) : null;
+        if (key) {
+          learning = false;
+          $("btnLearn").textContent = "Use the next press as the shutter";
+          $("f_SHUTTER_KEYS").value = key;
+          logLine('Learned "' + key + '" — press Save changes to keep it.', true);
+          return;
+        }
+      }
+      logLine(kind.toUpperCase() + "   " + detail, kind === "fire");
+    };
+    window.Remote.start({ keys: [], acceptAnyKey: false, swallow: true });
+    window.Remote.startMediaSession();
+  }
+
   /* ---------- tabs ---------- */
 
   function showPanel(name) {
     document.querySelectorAll(".tab").forEach(t => t.classList.toggle("on", t.dataset.p === name));
     document.querySelectorAll(".panel").forEach(p => p.classList.toggle("on", p.dataset.p === name));
+    if (name !== "remote" && listening && window.Remote) {
+      window.Remote.stop();
+      listening = false;
+      $("btnListen").textContent = "Start listening";
+      $("btnListen").className = "btn go";
+    }
     if (name === "photos") renderPhotos();
     if (name === "tpl") renderTemplates();
   }
@@ -695,6 +763,16 @@
       }
       paintPrinter();
     };
+    $("btnListen").onclick = function () { startListening(this); };
+    $("btnLearn").onclick = function () {
+      if (!listening) { toast("Tap Start listening first", true); return; }
+      learning = true;
+      this.blur();
+      this.textContent = "Press the remote now…";
+      logLine("Waiting for a key…");
+    };
+    $("btnClearLog").onclick = function () { lines = 0; $("rlog").textContent = "Cleared."; };
+
     $("btnTestSupa").onclick = function () { testSupabase(this); };
     $("btnTestCard").onclick = function () { runSettingsTest(this); };
     $("btnDiag").onclick = function () { runDiagnostic(this); };

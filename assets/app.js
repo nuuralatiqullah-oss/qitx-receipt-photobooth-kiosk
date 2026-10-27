@@ -366,19 +366,39 @@
     });
   }
 
+  function wait(sec) {
+    return new Promise(r => setTimeout(r, Math.max(0, sec) * 1000));
+  }
+
+  /** One shot: countdown, flash, capture. */
+  async function oneShot() {
+    await countdown(CFG.COUNTDOWN_SECONDS);
+    const flash = $("flash");
+    flash.classList.remove("fire");
+    void flash.offsetWidth;
+    flash.classList.add("fire");
+    state.shots.push(await capturePhoto());
+    paintShots();
+  }
+
   async function takeShot() {
     if (state.shooting) return;
     state.shooting = true;
     $("btnShoot").disabled = true;
     $("captureHint").textContent = "Get ready";
     try {
-      await countdown(CFG.COUNTDOWN_SECONDS);
-      const flash = $("flash");
-      flash.classList.remove("fire");
-      void flash.offsetWidth;
-      flash.classList.add("fire");
-      state.shots.push(await capturePhoto());
-      paintShots();
+      // One press takes the lot, so nobody has to reach back to the
+      // tablet between poses.
+      const runAll = CFG.AUTO_SEQUENCE === true;
+      do {
+        await oneShot();
+        if (state.shots.length >= state.frame.shots) break;
+        if (runAll) {
+          $("captureHint").textContent = "Next pose…";
+          await wait(CFG.AUTO_SEQUENCE_GAP == null ? 2 : CFG.AUTO_SEQUENCE_GAP);
+        }
+      } while (runAll && state.shots.length < state.frame.shots);
+
       if (state.shots.length >= state.frame.shots) {
         stopCamera();
         await buildSheet();
@@ -688,6 +708,40 @@
 
   /* ---------------- wiring ---------------- */
 
+  /* A remote press should do whatever the screen's main button does,
+     so one button can run a whole session hands-free. */
+  function remoteFire() {
+    if ($("scrCapture").classList.contains("active")) {
+      if (!state.shooting) takeShot();
+    } else if ($("scrWelcome").classList.contains("active")) {
+      show("scrFrames");
+    } else if ($("scrFrames").classList.contains("active")) {
+      if (state.frame) goCapture();
+    } else if ($("scrReview").classList.contains("active")) {
+      if (CFG.ALLOW_GUEST_PRINT !== false) doPrint();
+    } else if ($("scrDone").classList.contains("active")) {
+      hardReset();
+    }
+  }
+
+  function startRemote() {
+    if (!window.Remote || CFG.REMOTE_SHUTTER === false) return;
+    window.Remote.onFire = remoteFire;
+    window.Remote.start({
+      keys: CFG.SHUTTER_KEYS || ["Enter", "Space"],
+      acceptAnyKey: CFG.SHUTTER_ANY_KEY === true
+    });
+    // Media keys need playback, which needs a user gesture — the first
+    // tap on Start is the earliest one we get.
+    if (CFG.SHUTTER_MEDIA_KEYS !== false) {
+      const arm = function () {
+        window.Remote.startMediaSession();
+        document.removeEventListener("pointerdown", arm);
+      };
+      document.addEventListener("pointerdown", arm, { once: true });
+    }
+  }
+
   function wire() {
     $("brandName").firstChild.textContent = CFG.BOOTH_NAME;
     $("btnStart").textContent = CFG.START_LABEL || "Start";
@@ -779,6 +833,7 @@
     state.sessionId = uid(10);
     if (window.Settings) window.Settings.applyOrientation();
     wire();
+    startRemote();
 
     // Trim a REST/storage endpoint down to the project origin — the
     // dashboard makes that URL easy to copy, and supabase-js needs the

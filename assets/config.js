@@ -84,10 +84,37 @@ window.CONFIG = {
   CAMERA_IDEAL_WIDTH: 3840,  // asks for the best still the sensor has
   COUNTDOWN_SECONDS: 3,
 
+  /* ---- Remote shutter (editable in Admin) ----
+     A Bluetooth selfie remote, keyboard or foot pedal is just a
+     keyboard: whatever key it sends can fire the shutter.
+
+     NOTE: the volume keys cannot be used. Android handles those in
+     the OS and never passes them to a web page, in any browser. If
+     your remote only sends Volume Up, look for an iOS/Android switch
+     on it — iOS mode usually sends Enter instead. Admin > Remote
+     shows exactly what yours sends. */
+  REMOTE_SHUTTER: true,
+
+  /* Keys that fire the shutter. Admin can learn one from the remote. */
+  SHUTTER_KEYS: ["Enter", "Space", "NumpadEnter"],
+
+  /* Fire on ANY key. Handy with an odd remote, but then a stray
+     keyboard press also takes a photo. */
+  SHUTTER_ANY_KEY: false,
+
+  /* Also listen for media keys (play/pause/next). Needs a silent
+     clip looping to hold the media session open. */
+  SHUTTER_MEDIA_KEYS: true,
+
   /* ---- Booth behaviour (editable in Admin) ---- */
   DEFAULT_FRAME: "",         // frame id to preselect, "" = let guests choose
   /* Ask the guest how many copies when they tap Print.
      Off = print AUTO_PRINT_COPIES straight away. */
+  /* Take every shot in one go after a single press, with a countdown
+     between each. Removes most of the need to reach the tablet. */
+  AUTO_SEQUENCE: false,
+  AUTO_SEQUENCE_GAP: 2,      // seconds to pose between shots
+
   ASK_COPIES: true,
   MAX_COPIES: 5,
   AUTO_PRINT_COPIES: 1,

@@ -8,7 +8,7 @@
    Bump CACHE when you change any cached file, or tablets will
    keep serving the old one.
    ============================================================ */
-const CACHE = "kiosk-v12";
+const CACHE = "kiosk-v13";
 
 const SHELL = [
   "./",
@@ -20,6 +20,7 @@ const SHELL = [
   "./assets/frames.js",
   "./assets/imaging.js",
   "./assets/printer.js",
+  "./assets/remote.js",
   "./assets/app.js",
   "./assets/admin.js",
   "./assets/icons/icon-192.png",
