@@ -771,6 +771,10 @@
     $("btnRetake").onclick = goCapture;
     $("btnSave").onclick = saveStrip;
     $("btnShare").onclick = shareStrip;
+    // The same two on the done screen. keepsake() is still valid there
+    // — state is only cleared by hardReset() on "Start over".
+    $("btnDoneSave").onclick = saveStrip;
+    $("btnDoneShare").onclick = shareStrip;
     $("btnPrint").onclick = doPrint;
     $("btnPrintAgain").onclick = doPrint;
     $("btnFinish").onclick = hardReset;
