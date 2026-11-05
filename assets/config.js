@@ -10,7 +10,7 @@ window.CONFIG = {
      Shown at the bottom of Admin. If this does not match what you
      just deployed, the tablet is running an old copy: tap
      "Force update" there. Bump it with every deploy. ---- */
-  APP_VERSION: "v16",
+  APP_VERSION: "v17",
 
   /* ---- Branding (editable in Admin) ---- */
   BOOTH_NAME: "NUURAL BOOTH",

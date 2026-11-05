@@ -112,6 +112,10 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 .row{display:flex;gap:12px;flex-wrap:wrap;justify-content:center;width:100%;max-width:470px}
 .revacts{display:flex;flex-direction:column;gap:12px;align-items:center;width:100%}
 .row .btn{flex:1 1 150px}
+/* .center is a bare flex column with no gap, so stacked rows sit
+   flush against each other. .revacts has its own gap, so scope this
+   to rows that are direct children of .center (the done screen). */
+.center > .row + .row{margin-top:12px}
 
 /* ---------- the paper strip (the hero) ---------- */
 .strip{
