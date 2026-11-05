@@ -416,7 +416,12 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
 <script src="assets/config.js"></script>
 <script src="assets/settings.js"></script>
 <script src="assets/frames.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<!-- Vendored, not CDN. A booth on venue wifi must not depend on
+     jsdelivr being reachable: if these fail to load there is no
+     Supabase client and no QR, and the guest silently loses the
+     digital copy. supabase-js 2.119.0, qrcode 1.5.3. -->
+<script src="assets/vendor/supabase.min.js"></script>
+<script src="assets/vendor/qrcode.min.js"></script>
 <script src="assets/imaging.js"></script>
 <script src="assets/printer.js"></script>
 <script src="assets/remote.js"></script>

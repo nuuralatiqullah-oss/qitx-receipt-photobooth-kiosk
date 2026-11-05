@@ -605,7 +605,10 @@
     if (/^sb_secret_|^service_role/.test(key)) {
       say("That's the secret key — use the publishable one", false); return;
     }
-    if (!window.supabase) { say("Supabase library didn't load — check the internet", false); return; }
+    // Both libraries ship with the app now, so a miss means a bad
+    // deploy or a half-populated cache, not the venue wifi.
+    if (!window.supabase) { say("Supabase library didn't load — tap Force update", false); return; }
+    if (!window.QRCode) { say("QR library didn't load — tap Force update", false); return; }
 
     btn.disabled = true;
     say("Testing…", true);
@@ -834,7 +837,9 @@
           ? "Build " + page
           : "Build " + page + " \u00b7 cache " + got + " \u2014 tap Force update";
       };
-      sw.controller.postMessage({ type: "VERSION" }, [ch.port1]);
+      // Listen on port1, hand port2 over. Transferring the port you
+      // are listening on neuters it and the reply never arrives.
+      sw.controller.postMessage({ type: "VERSION" }, [ch.port2]);
       setTimeout(function () {
         if (!answered) line.textContent = "Build " + page + " \u00b7 old cache \u2014 tap Force update";
       }, 1500);

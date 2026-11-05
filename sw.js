@@ -14,7 +14,7 @@
    versioned, never change under the same URL, and should not
    cost a round trip at every event.
    ============================================================ */
-const VERSION = "v17";
+const VERSION = "v18";
 const CACHE = "kiosk-" + VERSION;
 const NET_TIMEOUT = 3000;
 
@@ -31,6 +31,8 @@ const SHELL = [
   "./assets/remote.js",
   "./assets/app.js",
   "./assets/admin.js",
+  "./assets/vendor/supabase.min.js",
+  "./assets/vendor/qrcode.min.js",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
   "./assets/icons/maskable-512.png"
@@ -68,31 +70,51 @@ self.addEventListener("message", function (e) {
   if (msg.type === "SKIP_WAITING") self.skipWaiting();
 });
 
-function fromNetwork(req, sameOrigin) {
-  return new Promise(function (resolve, reject) {
-    let settled = false;
-    const timer = setTimeout(function () {
-      if (!settled) { settled = true; reject(new Error("timeout")); }
-    }, NET_TIMEOUT);
-
-    fetch(req).then(function (res) {
-      clearTimeout(timer);
-      if (settled) {
-        // Too slow for this request, but still worth caching.
-        if (res && res.ok) caches.open(CACHE).then(c => c.put(req, res.clone())).catch(() => {});
-        return;
-      }
-      settled = true;
-      if (res && res.ok && (sameOrigin || res.type === "cors")) {
-        const copy = res.clone();
-        caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
-      }
-      resolve(res);
-    }).catch(function (err) {
-      clearTimeout(timer);
-      if (!settled) { settled = true; reject(err); }
-    });
+/* Fetch and cache. No timeout here: a timeout that turns into a
+   response would be an EMPTY response, and an empty script tag is
+   worse than a slow one. v15 did exactly that and silently cost the
+   booth its Supabase client. */
+function netFetch(req, sameOrigin) {
+  return fetch(req).then(function (res) {
+    if (res && res.ok && (sameOrigin || res.type === "cors")) {
+      const copy = res.clone();
+      caches.open(CACHE).then(c => c.put(req, copy)).catch(() => {});
+    }
+    return res;
   });
+}
+
+function offline(req) {
+  if (req.mode === "navigate") {
+    return caches.match("./index.html").then(hit => hit || new Response("", { status: 504, statusText: "Offline" }));
+  }
+  return Promise.resolve(new Response("", { status: 504, statusText: "Offline" }));
+}
+
+/* Same-origin: current code when we can get it, cached code when the
+   network is slow. The timeout only decides whether to WAIT for the
+   network — it is armed only when there is a cached copy to fall back
+   on, so a slow network can never yield an empty response. */
+async function appFile(req) {
+  const net = netFetch(req, true);
+  net.catch(() => {});                   // the race below may ignore it
+
+  const cached = await caches.match(req);
+  if (!cached) {
+    try { return await net; } catch (e) { return offline(req); }
+  }
+
+  let timer;
+  const tick = new Promise(r => { timer = setTimeout(() => r("timeout"), NET_TIMEOUT); });
+  try {
+    const won = await Promise.race([net, tick]);
+    if (won === "timeout" || !won || !won.ok) return cached;
+    return won;
+  } catch (e) {
+    return cached;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 self.addEventListener("fetch", function (e) {
@@ -105,22 +127,14 @@ self.addEventListener("fetch", function (e) {
   // Supabase and other APIs must always go straight to the network.
   if (!sameOrigin && !CDN.test(url.hostname)) return;
 
-  // Immutable third-party assets: cache-first is right for these.
+  // Third-party assets are immutable: cache first, then a plain
+  // untimed fetch. Nothing here is ever faked with an empty body.
   if (!sameOrigin) {
     e.respondWith(
-      caches.match(req).then(hit => hit || fromNetwork(req, false).catch(() => new Response("", { status: 504 })))
+      caches.match(req).then(hit => hit || netFetch(req, false).catch(() => offline(req)))
     );
     return;
   }
 
-  // The booth's own files: fresh if we can get it, cache if we can't.
-  e.respondWith(
-    fromNetwork(req, true).catch(function () {
-      return caches.match(req).then(function (hit) {
-        if (hit) return hit;
-        if (req.mode === "navigate") return caches.match("./index.html");
-        return new Response("", { status: 504, statusText: "Offline" });
-      });
-    })
-  );
+  e.respondWith(appFile(req));
 });

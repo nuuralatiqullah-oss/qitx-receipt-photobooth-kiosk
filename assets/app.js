@@ -150,17 +150,29 @@
   }
 
   // Optional: frames defined in Supabase override/extend the built-ins.
-  async function loadFrames() {
+  /* Built-in and locally-uploaded layouts are set synchronously so the
+     picker can render at once. Anything stored in Supabase is merged in
+     afterwards and triggers a re-render.
+
+     The booth must never wait on the network to show a layout: an event
+     venue's wifi can leave a Supabase query hanging for a long time
+     (supabase-js sets no timeout of its own), and the guest would be
+     staring at an empty "choose a layout" screen the whole time. */
+  function loadFrames() {
     state.frames = window.Settings
       ? window.Settings.allFrames()
       : window.BUILTIN_FRAMES.slice();
-    if (!supabase) return;
+    if (!supabase) return Promise.resolve();
+    return mergeRemoteFrames();
+  }
+
+  async function mergeRemoteFrames() {
     try {
-      const res = await supabase
+      const res = await withTimeout(supabase
         .from("frames")
         .select("*")
         .eq("active", true)
-        .order("sort_order", { ascending: true });
+        .order("sort_order", { ascending: true }), FRAME_FETCH_MS);
       if (res.error) throw res.error;
       if (res.data && res.data.length) {
         const remote = res.data.map(r => ({
@@ -174,10 +186,24 @@
           overlayPath: r.overlay_path
         }));
         state.frames = remote.concat(state.frames);
+        // The picker is already on screen by now, so redraw it.
+        renderFrameGrid();
       }
     } catch (e) {
-      console.warn("Frame fetch failed, using built-ins:", e.message);
+      console.warn("Frame fetch failed, using built-ins:", e && e.message);
     }
+  }
+
+  /* supabase-js has no request timeout, so give it one. */
+  const FRAME_FETCH_MS = 6000;
+  function withTimeout(promise, ms) {
+    return new Promise(function (resolve, reject) {
+      const t = setTimeout(() => reject(new Error("timed out after " + ms + "ms")), ms);
+      Promise.resolve(promise).then(
+        v => { clearTimeout(t); resolve(v); },
+        e => { clearTimeout(t); reject(e); }
+      );
+    });
   }
 
   async function loadOverlay(frame) {
@@ -619,13 +645,45 @@
     }
   }
 
+  /* Say why there is no QR. Every branch below used to fall back to
+     the same cheerful line, so a broken bucket, a missing library and
+     a deliberately offline booth all looked identical. */
+  function hideNote() {
+    const note = $("qrNote");
+    if (note) { note.style.display = "none"; note.textContent = ""; }
+  }
+
+  /* No QR this time. An empty reason means that was expected — the
+     feature is off, or no project is configured — so the guest just
+     gets the plain line with no alarming note under it. */
+  function noQr(reason) {
+    $("doneLead").textContent = "Collect your print from the printer";
+    hideNote();
+    if (!reason) return;
+    const note = $("qrNote");
+    if (!note) return;
+    note.textContent = "No digital copy: " + reason;
+    note.style.display = "block";
+  }
+
   async function finishSession(copies) {
     $("qrBox").style.display = "none";
+    noQr("");
     state.guestUrl = null;
 
-    if (!supabase || !CFG.UPLOAD_PHOTOS) {
+    if (!CFG.UPLOAD_PHOTOS) {
       await saveLocalCopy("", copies);
-      $("doneLead").textContent = "Collect your print from the printer";
+      noQr("");                       // switched off on purpose
+      return;
+    }
+    if (!window.supabase) {
+      await saveLocalCopy("", copies);
+      noQr("the Supabase library didn't load");
+      return;
+    }
+    if (!supabase) {
+      await saveLocalCopy("", copies);
+      noQr("no Supabase project is configured");
       return;
     }
 
@@ -653,18 +711,29 @@
 
       await saveLocalCopy(state.guestUrl, copies);
 
-      if (CFG.SHOW_QR && state.guestUrl && window.QRCode) {
-        await window.QRCode.toCanvas($("qrCanvas"), state.guestUrl, { width: 200, margin: 1 });
-        $("qrBox").style.display = "block";
-        $("doneLead").textContent = "Scan the code to keep a digital copy";
-      } else {
-        $("doneLead").textContent = "Collect your print from the printer";
-      }
+      if (!CFG.SHOW_QR) { noQr(""); return; }
+      if (!window.QRCode) { noQr("the QR library didn't load"); return; }
+
+      await window.QRCode.toCanvas($("qrCanvas"), state.guestUrl, { width: 200, margin: 1 });
+      $("qrBox").style.display = "block";
+      $("doneLead").textContent = "Scan the code to keep a digital copy";
+      hideNote();          // NOT noQr(""), which resets the lead text
     } catch (e) {
-      console.warn("Upload failed:", e.message);
+      console.warn("Upload failed:", e && e.message);
       await saveLocalCopy("", copies);
-      $("doneLead").textContent = "Collect your print from the printer";
+      noQr(shortReason(e));
     }
+  }
+
+  /* Turn a Supabase error into something an operator can act on,
+     using the same wording as the Admin connection test. */
+  function shortReason(e) {
+    const m = String((e && e.message) || e || "unknown error");
+    if (/bucket.*not.*found|not.*found.*bucket/i.test(m)) return 'the "' + CFG.PHOTO_BUCKET + '" bucket is missing';
+    if (/row-level security|policy|unauthor|permission/i.test(m)) return "the upload policy is missing";
+    if (/invalid path/i.test(m)) return "the project URL looks wrong";
+    if (/failed to fetch|networkerror|load failed/i.test(m)) return "the tablet is offline";
+    return m;
   }
 
   /* ---------------- navigation ---------------- */
@@ -853,8 +922,8 @@
       });
     }
 
-    await loadFrames();
-    renderFrameGrid();
+    loadFrames();        // built-ins are set synchronously
+    renderFrameGrid();   // …so the picker is usable immediately
 
     if (!window.Printer.isSupported()) {
       toast("This browser can't talk to USB printers. Use Chrome or Edge over HTTPS.", true);

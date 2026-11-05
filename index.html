@@ -427,6 +427,8 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
       <h1>Thank you</h1>
       <div id="qrBox"><canvas id="qrCanvas"></canvas></div>
       <p class="lead" id="doneLead">Scan the code to keep a digital copy</p>
+      <!-- Why there is no QR. Silence here cost an evening once. -->
+      <p class="note" id="qrNote" style="display:none;max-width:40ch;margin:-10px auto 16px"></p>
       <div class="row">
         <button class="btn alt" id="btnPrintAgain">Print again</button>
         <button class="btn go" id="btnFinish">Start over</button>
@@ -454,8 +456,12 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 
 <div class="toast" id="toast"></div>
 
-<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
-<script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- Vendored, not CDN. A booth on venue wifi must not depend on
+     jsdelivr being reachable: if these fail to load there is no
+     Supabase client and no QR, and the guest silently loses the
+     digital copy. supabase-js 2.119.0, qrcode 1.5.3. -->
+<script src="assets/vendor/supabase.min.js"></script>
+<script src="assets/vendor/qrcode.min.js"></script>
 <script src="assets/config.js"></script>
 <script src="assets/settings.js"></script>
 <script src="assets/frames.js"></script>
