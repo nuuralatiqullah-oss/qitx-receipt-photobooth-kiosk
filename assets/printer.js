@@ -95,9 +95,11 @@
   Printer.connect = async function () {
     if (!Printer.isSupported()) throw new Error("This browser has no WebUSB. Use Chrome or Edge.");
     try {
-      const opts = showAllDevices
-        ? { acceptAllDevices: true }
-        : { filters: VENDOR_FILTERS };
+      /* WebUSB always requires `filters`; an empty array is how you
+         ask for every device. (`acceptAllDevices` is Web Bluetooth,
+         not WebUSB — passing it throws "Required member is
+         undefined".) */
+      const opts = { filters: showAllDevices ? [] : VENDOR_FILTERS };
       const device = await navigator.usb.requestDevice(opts);
       await claim(device);
       showAllDevices = false;
