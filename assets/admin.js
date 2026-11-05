@@ -492,7 +492,11 @@
       return;
     }
     const on = window.Printer.isConnected();
-    el.textContent = on ? "Connected" : "Not connected";
+    // Name and USB IDs when connected — the IDs are what identifies
+    // this exact printer model if something needs chasing later.
+    el.textContent = on
+      ? "Connected \u2014 " + (window.Printer.describe() || "Printer")
+      : "Not connected";
     el.style.color = on ? "var(--jade)" : "var(--ink-soft)";
     $("btnConnect").textContent = on ? "Reconnect" : "Connect printer";
   }
@@ -798,6 +802,64 @@
       renderTemplates();
       toast("Settings reset");
     };
+
+    paintVersion();
+    $("btnUpdateApp").onclick = forceUpdate;
+  }
+
+  /* ----------------------------------------------------------
+     BUILD STAMP
+     Two numbers that should agree: the version in the config the
+     page actually loaded, and the version of the service worker
+     answering its requests. If they differ, or either is behind
+     what was deployed, the tablet is on a stale copy.
+     ---------------------------------------------------------- */
+  function paintVersion() {
+    const line = $("verLine");
+    if (!line) return;
+    const page = (window.CONFIG && window.CONFIG.APP_VERSION) || "?";
+    line.textContent = "Build " + page;
+
+    const sw = navigator.serviceWorker;
+    if (!sw || !sw.controller) { line.textContent = "Build " + page + " \u00b7 no cache"; return; }
+
+    // MessageChannel so the reply comes straight back to us.
+    try {
+      const ch = new MessageChannel();
+      let answered = false;
+      ch.port1.onmessage = function (e) {
+        answered = true;
+        const got = (e.data && e.data.version) || "?";
+        line.textContent = got === page
+          ? "Build " + page
+          : "Build " + page + " \u00b7 cache " + got + " \u2014 tap Force update";
+      };
+      sw.controller.postMessage({ type: "VERSION" }, [ch.port1]);
+      setTimeout(function () {
+        if (!answered) line.textContent = "Build " + page + " \u00b7 old cache \u2014 tap Force update";
+      }, 1500);
+    } catch (e) { /* leave the page version showing */ }
+  }
+
+  /* Clears every cache, drops the service worker and reloads from
+     the network. The escape hatch for "my fix isn't showing up". */
+  async function forceUpdate() {
+    const btn = $("btnUpdateApp");
+    if (btn) { btn.disabled = true; btn.textContent = "Updating\u2026"; }
+    try {
+      if (window.caches && caches.keys) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        await Promise.all(regs.map(r => r.unregister()));
+      }
+    } catch (e) { /* reload anyway — a fresh load re-registers */ }
+    // Cache-bust the navigation itself so Android's HTTP cache
+    // cannot hand back the old admin.html either.
+    const base = location.href.split("#")[0].split("?")[0];
+    location.replace(base + "?u=" + Date.now());
   }
 
   window.addEventListener("pagehide", freeUrls);

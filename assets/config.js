@@ -6,6 +6,12 @@
    Safe to commit: the Supabase publishable key is a public key.
    ============================================================ */
 window.CONFIG = {
+  /* ---- Build stamp ----
+     Shown at the bottom of Admin. If this does not match what you
+     just deployed, the tablet is running an old copy: tap
+     "Force update" there. Bump it with every deploy. ---- */
+  APP_VERSION: "v15",
+
   /* ---- Branding (editable in Admin) ---- */
   BOOTH_NAME: "NUURAL BOOTH",
   EVENT_NAME: "Walimatul Urus",
