@@ -186,6 +186,7 @@
       at: Date.now(),
       blob: blob,                               // colour keepsake
       printBlob: (meta && meta.printBlob) || null,  // exact 1-bit print
+      gifBlob: (meta && meta.gifBlob) || null,      // animated strip, when the layout makes one
       frameId: (meta && meta.frameId) || "",
       frameName: (meta && meta.frameName) || "",
       copies: (meta && meta.copies) || 1,
@@ -224,16 +225,43 @@
     return tx("readwrite", s => { s.clear(); });
   };
 
-  /** Keep only the newest KEEP_LOCAL_COPIES so storage can't fill up. */
+  function recBytes(r) {
+    return ((r.blob && r.blob.size) || 0) +
+           ((r.printBlob && r.printBlob.size) || 0) +
+           ((r.gifBlob && r.gifBlob.size) || 0);
+  }
+
+  /**
+   * Keep the newest KEEP_LOCAL_COPIES, and stop sooner if they add up
+   * to more than MAX_LOCAL_BYTES.
+   *
+   * A count on its own was fine when a record was one JPEG. With an
+   * animated strip alongside it a record can be several times larger,
+   * and "40 of them" stops describing how much disk that is. A booth
+   * that runs out of storage halfway through a reception fails in the
+   * worst possible place, so the budget is in bytes.
+   */
   Settings.trimPrints = function () {
-    const keep = Settings.load().KEEP_LOCAL_COPIES || 40;
+    const cfg = Settings.load();
+    const keep = cfg.KEEP_LOCAL_COPIES || 40;
+    const budget = cfg.MAX_LOCAL_BYTES || 60 * 1024 * 1024;
     return Settings.listPrints().then(function (rows) {
-      const extra = rows.slice(keep);
-      if (!extra.length) return;
+      let used = 0;
+      const doomed = [];
+      rows.forEach(function (r, i) {
+        used += recBytes(r);
+        if (i >= keep || used > budget) doomed.push(r);
+      });
+      if (!doomed.length) return;
       return tx("readwrite", function (s) {
-        extra.forEach(r => s.delete(r.id));
+        doomed.forEach(r => s.delete(r.id));
       });
     });
+  };
+
+  /** What the saved strips currently occupy, for Admin to show. */
+  Settings.printsBytes = function () {
+    return Settings.listPrints().then(rows => rows.reduce((n, r) => n + recBytes(r), 0));
   };
 
   /**

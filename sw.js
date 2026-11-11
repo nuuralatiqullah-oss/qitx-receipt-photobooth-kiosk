@@ -14,7 +14,7 @@
    versioned, never change under the same URL, and should not
    cost a round trip at every event.
    ============================================================ */
-const VERSION = "v18";
+const VERSION = "v19";
 const CACHE = "kiosk-" + VERSION;
 const NET_TIMEOUT = 3000;
 
@@ -33,6 +33,8 @@ const SHELL = [
   "./assets/admin.js",
   "./assets/vendor/supabase.min.js",
   "./assets/vendor/qrcode.min.js",
+  "./assets/vendor/gifenc.min.js",
+  "./assets/animate.js",
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
   "./assets/icons/maskable-512.png"

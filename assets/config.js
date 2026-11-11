@@ -10,7 +10,7 @@ window.CONFIG = {
      Shown at the bottom of Admin. If this does not match what you
      just deployed, the tablet is running an old copy: tap
      "Force update" there. Bump it with every deploy. ---- */
-  APP_VERSION: "v18",
+  APP_VERSION: "v19",
 
   /* ---- Branding (editable in Admin) ---- */
   BOOTH_NAME: "NUURAL BOOTH",
@@ -88,6 +88,32 @@ window.CONFIG = {
   CAMERA_FACING: "user",     // "user" (selfie) or "environment"
   MIRROR_PREVIEW: true,
   CAMERA_IDEAL_WIDTH: 3840,  // asks for the best still the sensor has
+
+  /* ---- Animated strip ----
+     Three preview frames per pose, about GIF_FRAME_GAP_MS apart: one
+     just before the shutter, the shutter frame itself, one just after.
+     The middle frame is what gets printed and saved; all three make
+     the GIF, played 1-2-3-2 so the loop has no seam.
+
+     Three frames rather than eight is deliberate. It is the classic
+     photobooth GIF look and it keeps the file under half a megabyte,
+     which matters on venue wifi. ---- */
+  GIF_ENABLED: true,         // master switch; each layout opts in too
+  GIF_FRAME_GAP_MS: 180,     // spacing between the three frames
+  GIF_FRAME_MS: 160,         // on-screen time per frame in the loop
+  GIF_HOLD_MS: 400,          // dwell on the last frame, so it breathes
+  GIF_WIDTH: 360,            // encoded width; the rest follows the strip
+  GIF_MAX_COLORS: 128,
+
+  /* "preview" takes all three frames from the live stream, so the
+     middle one matches its neighbours exactly and the loop does not
+     pop. "photo" uses ImageCapture.takePhoto() for the middle frame:
+     better noise handling in a dim room, but a different exposure and
+     a few hundred ms stall in the middle of the burst. */
+  GIF_STILL_SOURCE: "preview",
+
+  // Layout ids with the animation switched off, set in Admin.
+  NO_GIF_FRAMES: [],
   COUNTDOWN_SECONDS: 3,
 
   /* ---- Remote shutter (editable in Admin) ----
@@ -128,5 +154,10 @@ window.CONFIG = {
   ALLOW_GUEST_PRINT: true,   // false = staff prints from Admin instead
   UPLOAD_PHOTOS: true,       // needs Supabase
   SHOW_QR: true,             // QR download (needs upload on)
-  KEEP_LOCAL_COPIES: 40      // recent prints kept on the tablet for Admin
+  KEEP_LOCAL_COPIES: 40,     // recent prints kept on the tablet for Admin
+
+  // Hard ceiling on what those strips may occupy. Reached before the
+  // count once layouts are animating, because a record is then a
+  // keepsake, a print bitmap and a GIF rather than one JPEG.
+  MAX_LOCAL_BYTES: 60 * 1024 * 1024
 };

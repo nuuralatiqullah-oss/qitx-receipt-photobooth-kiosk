@@ -12,7 +12,12 @@
   const state = {
     frames: [],
     frame: null,
-    shots: [],          // canvas per slot
+    shots: [],          // canvas per slot (the frame that prints)
+    bursts: [],         // [before, shutter, after] per slot, when the layout animates
+    sheetFrames: null,  // one composed colour strip per burst index
+    loopTimer: null,
+    gifBlob: null,      // encoded animated strip
+    gifJob: null,       // the encode, started while the guest reviews
     sheet: null,        // composed canvas, print resolution
     sheetDisplay: null, // colour keepsake shown, saved and shared
     prepared: null,     // 1-bit bitmap
@@ -29,6 +34,10 @@
   /* ---------------- helpers ---------------- */
 
   function show(id) {
+    // The review loop redraws a canvas on a timer. Leaving the screen
+    // without stopping it burns battery and, on a reprint, paints the
+    // old session's frames over the new strip.
+    if (id !== "scrReview") stopLoop();
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     $(id).classList.add("active");
     resetIdle();
@@ -314,6 +323,53 @@
     return grabFrame();
   }
 
+  function waitMs(ms) {
+    return new Promise(r => setTimeout(r, Math.max(0, ms)));
+  }
+
+  /** Does this layout produce an animated strip as well as a print?
+      Layouts are animated unless switched off, either globally or for
+      that one layout in Admin. An uploaded template behaves like a
+      built-in: on until you say otherwise. */
+  function gifOn() {
+    if (CFG.GIF_ENABLED === false) return false;
+    const f = state.frame;
+    if (!f || f.gif === false) return false;
+    const off = CFG.NO_GIF_FRAMES || [];
+    return off.indexOf(f.id) === -1;
+  }
+
+  function fireFlash() {
+    const flash = $("flash");
+    flash.classList.remove("fire");
+    void flash.offsetWidth;
+    flash.classList.add("fire");
+  }
+
+  /**
+   * Three frames around one shutter press: before, at, after.
+   *
+   * The flash fires first rather than on the middle frame, because it
+   * is a white overlay across the preview and lights the subject off
+   * the screen. Firing it mid-burst would brighten only frame two and
+   * the loop would pulse.
+   *
+   * All three come off the same preview stream by default so their
+   * exposure matches. CFG.GIF_STILL_SOURCE = "photo" swaps the middle
+   * one for a full ImageCapture still, which is cleaner in a dim room
+   * but stalls the burst and shifts the exposure.
+   */
+  async function captureBurst() {
+    const gap = CFG.GIF_FRAME_GAP_MS == null ? 180 : CFG.GIF_FRAME_GAP_MS;
+    fireFlash();
+    const before = grabFrame();
+    await waitMs(gap);
+    const hero = CFG.GIF_STILL_SOURCE === "photo" ? await capturePhoto() : grabFrame();
+    await waitMs(gap);
+    const after = grabFrame();
+    return [before, hero, after];
+  }
+
   /**
    * Size the preview box to the exact shape of the slot being filled,
    * as large as the space allows. Done in pixels rather than CSS
@@ -399,11 +455,15 @@
   /** One shot: countdown, flash, capture. */
   async function oneShot() {
     await countdown(CFG.COUNTDOWN_SECONDS);
-    const flash = $("flash");
-    flash.classList.remove("fire");
-    void flash.offsetWidth;
-    flash.classList.add("fire");
-    state.shots.push(await capturePhoto());
+    if (gifOn()) {
+      const burst = await captureBurst();
+      state.bursts.push(burst);
+      state.shots.push(burst[1]);      // the middle frame is the one that prints
+    } else {
+      fireFlash();
+      state.bursts.push(null);
+      state.shots.push(await capturePhoto());
+    }
     paintShots();
   }
 
@@ -477,7 +537,86 @@
     }));
     state.prepared = window.Imaging.prepareForPrint(state.sheet, { dither: CFG.DITHER });
 
+    /* The animated version: the same compose() run once per burst
+       index, so the header, footer, borders and any uploaded template
+       overlay are identical in every frame and only the photos move. */
+    state.sheetFrames = null;
+    if (gifOn() && state.bursts.length === state.shots.length &&
+        state.bursts.every(Boolean)) {
+      const n = state.bursts[0].length;
+      state.sheetFrames = [];
+      for (let f = 0; f < n; f++) {
+        const picks = state.bursts.map(b => b[f]);
+        state.sheetFrames.push(window.Imaging.compose(state.frame, picks,
+          Object.assign({}, text, {
+            width: CFG.PRINT_WIDTH_DOTS * scale,
+            photo: { mode: "display" }
+          })));
+      }
+    }
+
     showPreview(state.sheetDisplay);
+    playLoop();
+    startEncode();
+  }
+
+  /* Encoding takes a second or so on a tablet. Start it the moment
+     the review screen appears rather than when Print is pressed: the
+     guest spends longer looking at their strip than the encoder needs,
+     so by the time anything wants the GIF it is already sitting there. */
+  function startEncode() {
+    state.gifBlob = null;
+    state.gifJob = null;
+    if (!gifOn() || !state.sheetFrames || !window.Animate) return;
+    if (!window.Animate.isSupported()) return;
+    state.gifJob = window.Animate.encode(state.sheetFrames, {
+      width: CFG.GIF_WIDTH,
+      maxColors: CFG.GIF_MAX_COLORS,
+      frameMs: CFG.GIF_FRAME_MS,
+      holdMs: CFG.GIF_HOLD_MS
+    }).then(function (blob) {
+      state.gifBlob = blob;
+      return blob;
+    }).catch(function (e) {
+      console.warn("GIF encode failed:", e && e.message);
+      return null;
+    });
+  }
+
+  /** The animated strip, once the encode that started at review ends. */
+  async function gifBlob() {
+    if (state.gifBlob) return state.gifBlob;
+    if (state.gifJob) return await state.gifJob;
+    return null;
+  }
+
+  /* Ping-pong: 1-2-3-2. A straight 1-2-3 repeat jumps on the wrap,
+     and with only three frames that jump is the thing you notice. */
+  function loopOrder(n) {
+    const seq = [];
+    for (let i = 0; i < n; i++) seq.push(i);
+    for (let i = n - 2; i > 0; i--) seq.push(i);
+    return seq;
+  }
+
+  function stopLoop() {
+    if (state.loopTimer) { clearTimeout(state.loopTimer); state.loopTimer = null; }
+  }
+
+  function playLoop() {
+    stopLoop();
+    const frames = state.sheetFrames;
+    if (!frames || frames.length < 2) return;
+    const order = loopOrder(frames.length);
+    const per = CFG.GIF_FRAME_MS == null ? 160 : CFG.GIF_FRAME_MS;
+    const hold = CFG.GIF_HOLD_MS == null ? 400 : CFG.GIF_HOLD_MS;
+    let i = 0;
+    (function step() {
+      showPreview(frames[order[i]]);
+      const last = i === order.length - 1;
+      i = (i + 1) % order.length;
+      state.loopTimer = setTimeout(step, last ? hold : per);
+    })();
   }
 
   function showPreview(src) {
@@ -499,34 +638,45 @@
     return state.sheetDisplay || state.sheet;
   }
 
-  async function saveStrip() {
+  /* When the layout animates, the animated strip IS the keepsake —
+     a guest who posed for a moving photo does not want a still. The
+     print is unaffected either way. */
+  async function keepsakeBlob() {
+    if (gifOn()) {
+      const g = await gifBlob();
+      if (g) return { blob: g, ext: "gif", type: "image/gif" };
+    }
     const src = keepsake();
-    if (!src) return;
+    if (!src) return null;
+    return { blob: await canvasToBlob(src, "image/jpeg", 0.92), ext: "jpg", type: "image/jpeg" };
+  }
+
+  async function saveStrip() {
     try {
-      const blob = await canvasToBlob(src, "image/jpeg", 0.92);
-      const url = URL.createObjectURL(blob);
+      const k = await keepsakeBlob();
+      if (!k) return;
+      const url = URL.createObjectURL(k.blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = stripFilename("jpg");
+      a.download = stripFilename(k.ext);
       a.click();
       setTimeout(() => URL.revokeObjectURL(url), 10000);
-      toast("Saved to this tablet");
+      toast(k.ext === "gif" ? "Animated strip saved" : "Saved to this tablet");
     } catch (e) {
       toast("Couldn't save: " + e.message, true);
     }
   }
 
   async function shareStrip() {
-    const src = keepsake();
-    if (!src) return;
-    let blob;
+    let k;
     try {
-      blob = await canvasToBlob(src, "image/jpeg", 0.92);
+      k = await keepsakeBlob();
     } catch (e) {
       toast("Couldn't prepare the photo", true);
       return;
     }
-    const file = new File([blob], stripFilename("jpg"), { type: "image/jpeg" });
+    if (!k) return;
+    const file = new File([k.blob], stripFilename(k.ext), { type: k.type });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
@@ -633,8 +783,12 @@
       // keep the dot-for-dot version too, so a reprint is identical
       const printBlob = await canvasToBlob(
         window.Imaging.bitsToCanvas(state.prepared), "image/png");
+      // Keep the animated version too, so Admin can re-share a moving
+      // strip later rather than only the frozen frame.
+      const gif = gifOn() ? await gifBlob() : null;
       await window.Settings.addPrint(blob, {
         printBlob: printBlob,
+        gifBlob: gif,
         copies: Math.max(1, copies || 1),
         frameId: String(state.frame.id),
         frameName: state.frame.name,
@@ -688,14 +842,20 @@
     }
 
     try {
+      /* Upload whichever one the guest is actually being given. On an
+         animating layout that is the GIF, so the QR leads to something
+         that moves; otherwise the still. Only one file goes up — venue
+         wifi is the slowest part of this whole machine. */
+      const k = await keepsakeBlob();
+      if (!k) throw new Error("nothing to upload");
+
       const d = new Date();
       const path = d.toISOString().slice(0, 10) + "/" +
-                   d.toISOString().slice(11, 19).replace(/:/g, "") + "-" + uid(4) + ".jpg";
-      const blob = await canvasToBlob(keepsake(), "image/jpeg", 0.92);
+                   d.toISOString().slice(11, 19).replace(/:/g, "") + "-" + uid(4) + "." + k.ext;
 
       const up = await supabase.storage
         .from(CFG.PHOTO_BUCKET)
-        .upload(path, blob, { contentType: "image/jpeg", upsert: false });
+        .upload(path, k.blob, { contentType: k.type, upsert: false });
       if (up.error) throw up.error;
 
       const { data: pub } = supabase.storage.from(CFG.PHOTO_BUCKET).getPublicUrl(path);
@@ -747,7 +907,12 @@
 
   function hardReset() {
     stopCamera();
+    stopLoop();
     state.shots = [];
+    state.bursts = [];
+    state.sheetFrames = null;
+    state.gifBlob = null;
+    state.gifJob = null;
     state.frame = null;
     state.sheet = null;
     state.sheetDisplay = null;
@@ -886,6 +1051,10 @@
       c.getContext("2d").drawImage(bmp, 0, 0);
       state.sheet = c;
       state.sheetDisplay = null;
+      state.bursts = [];
+      state.sheetFrames = null;
+      state.gifBlob = null;
+      state.gifJob = null;
       state.prepared = window.Imaging.prepareForPrint(c, {
         dither: CFG.DITHER,
         ditherSheet: !rec.printBlob   // a colour fallback still needs dithering

@@ -204,6 +204,23 @@
       };
       acts.appendChild(tog);
 
+      /* Animation is per layout, so a busy queue can run a still-only
+         strip while the premium one moves. */
+      const noGif = (cfg.NO_GIF_FRAMES || []).indexOf(f.id) !== -1;
+      const animOff = noGif || f.gif === false;
+      const gtog = document.createElement("button");
+      gtog.className = "btn sm " + (animOff ? "alt" : "blue");
+      gtog.textContent = animOff ? "GIF off" : "GIF on";
+      gtog.title = "Three-frame animated strip for the QR, save and share";
+      gtog.onclick = function () {
+        const g = (window.Settings.load().NO_GIF_FRAMES || []).slice();
+        const i = g.indexOf(f.id);
+        if (i === -1) g.push(f.id); else g.splice(i, 1);
+        window.Settings.save({ NO_GIF_FRAMES: g });
+        renderTemplates();
+      };
+      acts.appendChild(gtog);
+
       if (isCustom) {
         const del = document.createElement("button");
         del.className = "btn sm warn";

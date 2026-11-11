@@ -15,6 +15,7 @@ window.BUILTIN_FRAMES = [
     height: 1520,
     shots: 3,
     header: true,
+    gif: true,        // three-frame animated strip as well as the print
     slots: [
       { x: 16, y: 140, w: 544, h: 408 },
       { x: 16, y: 564, w: 544, h: 408 },
@@ -28,6 +29,7 @@ window.BUILTIN_FRAMES = [
     height: 1240,
     shots: 2,
     header: true,
+    gif: true,        // three-frame animated strip as well as the print
     slots: [
       { x: 16, y: 140, w: 544, h: 544 },
       { x: 16, y: 700, w: 544, h: 408 }
@@ -40,6 +42,7 @@ window.BUILTIN_FRAMES = [
     height: 820,
     shots: 1,
     header: true,
+    gif: true,        // three-frame animated strip as well as the print
     slots: [{ x: 16, y: 140, w: 544, h: 544 }]
   },
   {
@@ -49,6 +52,7 @@ window.BUILTIN_FRAMES = [
     height: 950,
     shots: 4,
     header: true,
+    gif: true,        // three-frame animated strip as well as the print
     slots: [
       { x: 16, y: 140, w: 268, h: 336 },
       { x: 292, y: 140, w: 268, h: 336 },
