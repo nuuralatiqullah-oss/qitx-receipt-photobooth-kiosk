@@ -246,6 +246,188 @@
 
   /* ---------- compose the printable sheet ---------- */
 
+
+  /* ================= NEWSPAPER CHROME =================
+     Everything above and between the photos: rules, masthead,
+     dateline ears, headline, reversed bars, kickers.
+
+     Written for a 203 dpi head printing pure black or white. Two
+     rules follow from that and explain most of the choices below:
+     nothing may rely on a stroke thinner than about two dots, and
+     white-out-of-black needs fat letterforms and generous tracking
+     or the counters bleed shut and the word becomes a smudge.
+     ===================================================== */
+
+  const DISPLAY = '900 {S}px "Press Display", Georgia, serif';
+  const CAPS    = '600 {S}px "Press Caps", "Arial Narrow", sans-serif';
+  const MARGIN  = 16;
+
+  function font(tpl, px) { return tpl.replace("{S}", Math.max(1, Math.round(px))); }
+
+  /** Width of a string once per-character tracking is added. */
+  function trackedWidth(ctx, str, track) {
+    let w = 0;
+    for (const ch of str) w += ctx.measureText(ch).width + track;
+    return str.length ? w - track : 0;
+  }
+
+  /* Tracking is applied by hand rather than with ctx.letterSpacing.
+     It is exact, it centres predictably, and it does not depend on a
+     property Android Chrome only grew recently. */
+  function drawTracked(ctx, str, cx, baseline, track) {
+    const total = trackedWidth(ctx, str, track);
+    let x = cx - total / 2;
+    for (const ch of str) {
+      ctx.fillText(ch, x, baseline);
+      x += ctx.measureText(ch).width + track;
+    }
+  }
+
+  /** Shrink until it fits. Editable text means any string can be long. */
+  function fitSize(ctx, str, tpl, startPx, maxW, track) {
+    let px = startPx;
+    while (px > 8) {
+      ctx.font = font(tpl, px);
+      if (trackedWidth(ctx, str, track) <= maxW) break;
+      px -= 1;
+    }
+    ctx.font = font(tpl, px);
+    return px;
+  }
+
+  function diamond(ctx, cx, cy, r) {
+    ctx.beginPath();
+    ctx.moveTo(cx, cy - r);
+    ctx.lineTo(cx + r, cy);
+    ctx.lineTo(cx, cy + r);
+    ctx.lineTo(cx - r, cy);
+    ctx.closePath();
+    ctx.fill();
+  }
+
+  function drawChrome(ctx, frame, k, text, stamp) {
+    const W = Math.round(frame.width * k);
+    const m = Math.round(MARGIN * k);
+    const inner = W - 2 * m;
+    const cx = W / 2;
+    const px = v => Math.max(1, Math.round(v * k));
+    const get = key => String((text && text[key]) || "");
+
+    ctx.save();
+    ctx.textAlign = "left";
+    ctx.textBaseline = "alphabetic";
+    ctx.fillStyle = "#000000";
+
+    frame.chrome.forEach(function (b) {
+      const y = b.y * k;
+      const h = b.h * k;
+
+      if (b.t === "rule") {
+        if (b.style === "double") {
+          ctx.fillRect(m, y, inner, px(3));
+          ctx.fillRect(m, y + px(5), inner, px(2));
+        } else {
+          ctx.fillRect(m, y, inner, px(b.style === "thick" ? 4 : 2));
+        }
+        return;
+      }
+
+      if (b.t === "masthead") {
+        const str = get(b.key);
+        if (!str) return;
+        // leave room for an ornament either side
+        const orn = px(b.size * 0.55);
+        const size = fitSize(ctx, str, DISPLAY, b.size * k, inner - orn * 4, px(1));
+        const base = y + h * 0.82;
+        drawTracked(ctx, str, cx, base, px(1));
+        const half = trackedWidth(ctx, str, px(1)) / 2;
+        const oy = y + h * 0.55;
+        diamond(ctx, cx - half - orn, oy, px(size * 0.10));
+        diamond(ctx, cx + half + orn, oy, px(size * 0.10));
+        return;
+      }
+
+      if (b.t === "ears") {
+        const line = px(2);
+        ctx.fillRect(m, y, inner, line);
+        ctx.fillRect(m, y + h - line, inner, line);
+        const size = b.size * k;
+        ctx.font = font(CAPS, size);
+        const base = y + h / 2 + size * 0.36;
+        const track = px(1.2);
+        const parts = (b.keys || []).map(get);
+        if (parts[0]) {
+          let x = m + px(4);
+          for (const ch of parts[0]) { ctx.fillText(ch, x, base); x += ctx.measureText(ch).width + track; }
+        }
+        if (parts[1]) drawTracked(ctx, parts[1], cx, base, track);
+        if (parts[2]) {
+          const w = trackedWidth(ctx, parts[2], track);
+          let x = W - m - px(4) - w;
+          for (const ch of parts[2]) { ctx.fillText(ch, x, base); x += ctx.measureText(ch).width + track; }
+        }
+        return;
+      }
+
+      if (b.t === "headline") {
+        const str = get(b.key);
+        if (!str) return;
+        // Never let a headline reach the paper edge: it reads as a
+        // mistake, and the head is least accurate at the margins.
+        fitSize(ctx, str, DISPLAY, b.size * k, inner - px(16), px(1.5));
+        drawTracked(ctx, str, cx, y + h * 0.86, px(1.5));
+        return;
+      }
+
+      if (b.t === "bar") {
+        const str = get(b.key);
+        if (!str) return;
+        ctx.fillStyle = "#000000";
+        ctx.fillRect(m, y, inner, h);
+        // Reversed text: tracked hard so the white counters stay open
+        // after the head spreads a little heat into them.
+        const track = px(3);
+        fitSize(ctx, str, CAPS, b.size * k, inner - px(24), track);
+        ctx.fillStyle = "#ffffff";
+        drawTracked(ctx, str, cx, y + h * 0.70, track);
+        ctx.fillStyle = "#000000";
+        return;
+      }
+
+      if (b.t === "kicker") {
+        const str = get(b.key);
+        if (!str) return;
+        const track = px(2.5);
+        fitSize(ctx, str, CAPS, b.size * k, inner - px(80), track);
+        const base = y + h * 0.70;
+        drawTracked(ctx, str, cx, base, track);
+        const half = trackedWidth(ctx, str, track) / 2;
+        const mid = y + h * 0.52;
+        const d = px(3);
+        diamond(ctx, cx - half - px(12), mid, d);
+        diamond(ctx, cx + half + px(12), mid, d);
+        const line = px(2);
+        const gap = px(22);
+        const runL = (cx - half - gap) - m;
+        if (runL > px(10)) {
+          ctx.fillRect(m, mid - line / 2, runL, line);
+          ctx.fillRect(cx + half + gap, mid - line / 2, runL, line);
+        }
+        return;
+      }
+
+      if (b.t === "stamp") {
+        if (!stamp) return;
+        const size = b.size * k;
+        ctx.font = font(CAPS, size);
+        drawTracked(ctx, stamp, cx, y + h * 0.72, px(1.5));
+        return;
+      }
+    });
+
+    ctx.restore();
+  }
+
   Imaging.compose = function (frame, images, opts) {
     opts = opts || {};
     const targetW = opts.width || 576;
@@ -285,7 +467,12 @@
 
     if (opts.overlay) ctx.drawImage(opts.overlay, 0, 0, W, H);
 
-    if (frame.header && !opts.overlay) {
+    if (frame.chrome && !opts.overlay) {
+      // Built-in layouts carry their own block stack.
+      drawChrome(ctx, frame, k, opts.text || frame.text || {}, opts.stamp || "");
+    } else if (frame.header && !opts.overlay) {
+      // Uploaded layouts have no block stack: the plain caption still
+      // applies, so a template without artwork is not left bare.
       ctx.fillStyle = "#000000";
       ctx.textAlign = "center";
 
@@ -516,6 +703,17 @@
     }
     ctx.putImageData(img, 0, 0);
     return c;
+  };
+
+  /* Measuring text against a fallback face and then drawing with the
+     real one lays the strip out wrong, so compose waits for these. */
+  Imaging.fontsReady = function () {
+    if (!document.fonts || !document.fonts.load) return Promise.resolve();
+    return Promise.all([
+      document.fonts.load('900 40px "Press Display"'),
+      document.fonts.load('700 40px "Press Display"'),
+      document.fonts.load('600 20px "Press Caps"')
+    ]).catch(() => {});
   };
 
   window.Imaging = Imaging;

@@ -163,6 +163,87 @@
     }
   }
 
+  /* Friendly names for the layout's text keys. The keys themselves
+     are layout structure; these are what an operator reads. */
+  const WORD_LABELS = {
+    masthead: "Masthead",
+    h1: "Headline",
+    h2: "Second line",
+    bar1: "Banner above the photos",
+    bar2: "Banner at the bottom",
+    k1: "Between photos",
+    k2: "Between photos (2)",
+    k3: "Between photos (3)",
+    earL: "Top left",
+    earC: "Top centre",
+    earR: "Top right"
+  };
+
+  /** Inline editor for one layout's printed wording. */
+  function openWords(f) {
+    const wrap = $("tplList");
+    const rows = Array.prototype.slice.call(wrap.children);
+    const mine = rows.filter(r => r.dataset && r.dataset.frame === f.id)[0];
+    if (!mine) return;
+
+    const cur = window.Settings.frameText(f);
+    const panel = document.createElement("div");
+    panel.className = "box";
+    panel.dataset.words = f.id;
+    panel.style.cssText = "margin:0 0 12px;padding:12px 14px";
+
+    const h = document.createElement("p");
+    h.className = "note";
+    h.style.margin = "0 0 10px";
+    h.textContent = "Printed on " + f.name + ". Long lines shrink to fit rather than run off the paper.";
+    panel.appendChild(h);
+
+    const inputs = {};
+    Object.keys(f.text).forEach(function (key) {
+      const lab = document.createElement("label");
+      const sp = document.createElement("span");
+      sp.className = "lb";
+      sp.textContent = WORD_LABELS[key] || key;
+      const inp = document.createElement("input");
+      inp.type = "text";
+      inp.value = cur[key] == null ? "" : cur[key];
+      inputs[key] = inp;
+      lab.appendChild(sp);
+      lab.appendChild(inp);
+      panel.appendChild(lab);
+    });
+
+    const bar = document.createElement("div");
+    bar.style.cssText = "display:flex;gap:8px;margin-top:10px";
+
+    const save = document.createElement("button");
+    save.className = "btn sm go";
+    save.textContent = "Save words";
+    save.onclick = function () {
+      const patch = {};
+      Object.keys(inputs).forEach(k => { patch[k] = inputs[k].value; });
+      window.Settings.saveFrameText(f.id, patch);
+      renderTemplates();
+      toast("Wording saved");
+    };
+
+    const undo = document.createElement("button");
+    undo.className = "btn sm alt";
+    undo.textContent = "Back to default";
+    undo.onclick = function () {
+      window.Settings.resetFrameText(f.id);
+      renderTemplates();
+      openWords(f);
+      toast("Wording reset");
+    };
+
+    bar.appendChild(save);
+    bar.appendChild(undo);
+    panel.appendChild(bar);
+    mine.parentNode.insertBefore(panel, mine.nextSibling);
+    panel.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+
   function renderTemplates() {
     const wrap = $("tplList");
     wrap.innerHTML = "";
@@ -175,6 +256,7 @@
       const isCustom = custom.some(c => c.id === f.id);
       const row = document.createElement("div");
       row.className = "tpl";
+      row.dataset.frame = f.id;
 
       const cv = document.createElement("canvas");
       drawThumb(cv, f);
@@ -220,6 +302,21 @@
         renderTemplates();
       };
       acts.appendChild(gtog);
+
+      // Built-in layouts carry their own wording. Uploaded ones have
+      // artwork instead, so there is nothing to type.
+      if (f.text) {
+        const wtog = document.createElement("button");
+        wtog.className = "btn sm alt";
+        wtog.textContent = "Words";
+        wtog.onclick = function () {
+          const open = row.nextSibling && row.nextSibling.dataset &&
+                       row.nextSibling.dataset.words === f.id;
+          renderTemplates();
+          if (!open) openWords(f);
+        };
+        acts.appendChild(wtog);
+      }
 
       if (isCustom) {
         const del = document.createElement("button");

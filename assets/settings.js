@@ -117,6 +117,28 @@
     catch (e) { return false; }
   };
 
+  /* ---------- per-layout strip wording ----------
+     Each built-in layout ships its own defaults. Overrides are kept
+     by layout id, so the four strips can read differently without
+     one global caption having to suit all of them. */
+
+  Settings.frameText = function (frame) {
+    const all = Settings.load().FRAME_TEXT || {};
+    return Object.assign({}, frame && frame.text, all[frame && frame.id]);
+  };
+
+  Settings.saveFrameText = function (frameId, patch) {
+    const all = Object.assign({}, Settings.load().FRAME_TEXT || {});
+    all[frameId] = Object.assign({}, all[frameId], patch);
+    return Settings.save({ FRAME_TEXT: all });
+  };
+
+  Settings.resetFrameText = function (frameId) {
+    const all = Object.assign({}, Settings.load().FRAME_TEXT || {});
+    delete all[frameId];
+    return Settings.save({ FRAME_TEXT: all });
+  };
+
   /** Built-in frames plus any added in Admin, with hidden ones removed. */
   Settings.allFrames = function () {
     const cfg = Settings.load();

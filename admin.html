@@ -10,6 +10,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Outfit:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/press.css">
 <style>
 :root{
   --ink:#1a1626;--ink-soft:#6b6480;--paper:#fff;--wash:#f6f3ff;
@@ -128,14 +129,15 @@ dialog::backdrop{background:rgba(26,22,38,.55)}
     <section class="panel on" data-p="text">
       <div class="box">
         <h2>What guests see</h2>
-        <p class="note">This wording appears on the booth screens and is printed on every strip.</p>
+        <p class="note">Wording on the booth screens. The words printed on a strip belong to the layout
+          now, because the four read differently &mdash; edit those under <b>Layouts</b>.</p>
         <label><span class="lb">Booth name</span><input type="text" id="f_BOOTH_NAME">
-          <span class="hint">Big heading on the welcome screen and the top of the printed strip.</span></label>
+          <span class="hint">Big heading on the welcome screen.</span></label>
         <label><span class="lb">Event name</span><input type="text" id="f_EVENT_NAME"></label>
         <label><span class="lb">Welcome line</span><input type="text" id="f_TAGLINE"></label>
         <label><span class="lb">Start button</span><input type="text" id="f_START_LABEL"></label>
         <label><span class="lb">Printed footer</span><input type="text" id="f_FOOTER_LINE">
-          <span class="hint">Printed under the photos, above the date.</span></label>
+          <span class="hint">Only used by uploaded layouts, which have no wording of their own.</span></label>
       </div>
       <div class="box">
         <h2>Admin PIN</h2>

@@ -504,8 +504,15 @@
 
   async function buildSheet() {
     const overlay = await loadOverlay(state.frame);
+    // The chrome measures strings to decide how big to set them, so
+    // the faces have to be in memory first or it measures a fallback
+    // and lays the strip out to the wrong widths.
+    if (window.Imaging.fontsReady) await window.Imaging.fontsReady();
     const text = {
       overlay: overlay,
+      // per-layout newspaper wording, for the built-in block stacks
+      text: window.Settings.frameText(state.frame),
+      // plain caption, for uploaded layouts that have no block stack
       header: CFG.BOOTH_NAME,
       subheader: CFG.EVENT_NAME,
       footer: CFG.FOOTER_LINE,

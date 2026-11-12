@@ -1,0 +1,40 @@
+/* ============================================================
+   PRESS FACES
+   Two families, vendored rather than fetched: the booth has to lay
+   out a strip correctly on venue wifi or none at all.
+
+   Playfair Display at 900 for mastheads and headlines. A lighter
+   weight would look more like a real newspaper, but this prints at
+   203 dpi in pure black and white — anything with fine hairlines
+   drops out of the strokes and the word turns to lace. 900 keeps
+   every stem thick enough to survive the threshold.
+
+   Oswald at 600 for small caps, dateline ears and reversed bars.
+   Condensed means more characters per line at a size the printer can
+   still resolve, and its even stroke weight reverses out of a black
+   bar without the counters bleeding shut.
+   ============================================================ */
+
+@font-face {
+  font-family: "Press Display";
+  font-style: normal;
+  font-weight: 900;
+  font-display: block;
+  src: url("vendor/fonts/playfair-900.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Press Display";
+  font-style: normal;
+  font-weight: 700;
+  font-display: block;
+  src: url("vendor/fonts/playfair-700.woff2") format("woff2");
+}
+
+@font-face {
+  font-family: "Press Caps";
+  font-style: normal;
+  font-weight: 600;
+  font-display: block;
+  src: url("vendor/fonts/oswald-600.woff2") format("woff2");
+}
