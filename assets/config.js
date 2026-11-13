@@ -10,7 +10,7 @@ window.CONFIG = {
      Shown at the bottom of Admin. If this does not match what you
      just deployed, the tablet is running an old copy: tap
      "Force update" there. Bump it with every deploy. ---- */
-  APP_VERSION: "v20",
+  APP_VERSION: "v21",
 
   /* ---- Branding (editable in Admin) ---- */
   BOOTH_NAME: "NUURAL BOOTH",
@@ -90,16 +90,19 @@ window.CONFIG = {
   CAMERA_IDEAL_WIDTH: 3840,  // asks for the best still the sensor has
 
   /* ---- Animated strip ----
-     Three preview frames per pose, about GIF_FRAME_GAP_MS apart: one
-     just before the shutter, the shutter frame itself, one just after.
-     The middle frame is what gets printed and saved; all three make
-     the GIF, played 1-2-3-2 so the loop has no seam.
+     GIF_FRAMES preview frames per pose, GIF_FRAME_GAP_MS apart. The
+     one at GIF_SHUTTER_INDEX is the shutter moment: that frame is
+     what gets printed and saved, so the paper strip is unaffected by
+     any of this. At the default four, one frame lands before the
+     shutter and two after, and the loop plays 1-2-3-4-3-2.
 
-     Three frames rather than eight is deliberate. It is the classic
-     photobooth GIF look and it keeps the file under half a megabyte,
-     which matters on venue wifi. ---- */
+     Four rather than a dozen is deliberate. It is the photobooth
+     look, and it keeps the file well under a megabyte, which is what
+     decides whether a guest on venue wifi actually gets it. ---- */
   GIF_ENABLED: true,         // master switch; each layout opts in too
-  GIF_FRAME_GAP_MS: 180,     // spacing between the three frames
+  GIF_FRAMES: 4,             // frames captured per pose
+  GIF_SHUTTER_INDEX: 1,      // which of them is the shutter moment
+  GIF_FRAME_GAP_MS: 180,     // spacing between frames
   GIF_FRAME_MS: 160,         // on-screen time per frame in the loop
   GIF_HOLD_MS: 400,          // dwell on the last frame, so it breathes
   GIF_WIDTH: 360,            // encoded width; the rest follows the strip
@@ -114,6 +117,19 @@ window.CONFIG = {
 
   // Layout ids with the animation switched off, set in Admin.
   NO_GIF_FRAMES: [],
+
+  /* ---- What a guest can take away ----
+     One QR per kind, on the done screen. Drop any of them from this
+     list to stop offering it; "gif" is skipped automatically on a
+     layout that is not animating. ---- */
+  DOWNLOADS: ["color", "bw", "gif"],
+
+  /* "grayscale" is a clean desaturated copy of the colour strip: it
+     posts well and reads properly on a phone. "print" is the actual
+     1-bit dithered bitmap that went to the printer — the digital
+     twin of the paper, grain and all, which suits the newspaper
+     layouts but looks like noise at small sizes. */
+  BW_STYLE: "grayscale",
   COUNTDOWN_SECONDS: 3,
 
   /* ---- Remote shutter (editable in Admin) ----

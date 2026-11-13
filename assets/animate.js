@@ -3,14 +3,14 @@
    Turns the composed colour strips — one per burst frame — into a
    looping GIF.
 
-   Three frames, played 1-2-3-2. Three is not a compromise: it is the
-   photobooth look, and it keeps the file under half a megabyte, which
-   is what decides whether a guest on venue wifi actually gets their
-   photo.
+   A handful of frames played as a ping-pong, so the wrap has no
+   seam. Few frames is not a compromise: it is the photobooth look,
+   and it keeps the file small, which is what decides whether a guest
+   on venue wifi actually gets their photo.
 
-   One palette for the whole file. The frames are 180 ms apart so
-   their colours are near identical; a palette per frame would cost
-   size and make the loop shimmer.
+   One palette for the whole file. The frames are a fraction of a
+   second apart so their colours are near identical; a palette per
+   frame would cost size and make the loop shimmer.
    ============================================================ */
 (function () {
   "use strict";
@@ -61,9 +61,11 @@
     const imgs = frames.map(f => downscale(f, width));
     const w = imgs[0].width, h = imgs[0].height;
 
-    /* The middle frame is the posed one, so build the palette from it:
-       it is the frame the eye spends most of the loop looking at. */
-    const hero = imgs[Math.floor(imgs.length / 2)];
+    /* Build the palette from the posed frame, not an arbitrary middle
+       one: it is the frame the eye spends most of the loop on, and
+       with an even frame count there is no middle anyway. */
+    const hi = Math.min(Math.max(0, opts.heroIndex == null ? 1 : opts.heroIndex), imgs.length - 1);
+    const hero = imgs[hi];
     const palette = G.quantize(hero.data, colors, { format: "rgb565" });
 
     const indexed = imgs.map(im => G.applyPalette(im.data, palette, "rgb565"));

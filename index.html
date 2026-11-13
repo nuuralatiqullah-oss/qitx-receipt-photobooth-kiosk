@@ -117,6 +117,13 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
    flush against each other. .revacts has its own gap, so scope this
    to rows that are direct children of .center (the done screen). */
 .center > .row + .row{margin-top:12px}
+/* One QR per download kind, side by side. They wrap on a narrow
+   screen rather than shrinking: a QR that is too small to scan is
+   worse than one that needs a swipe to reach. */
+#qrRow{display:flex;gap:18px;justify-content:center;flex-wrap:wrap;margin-bottom:10px}
+.qrcell{display:flex;flex-direction:column;align-items:center;gap:6px}
+.qrcell canvas{display:block;border:2.5px solid var(--ink);border-radius:10px;background:#fff;padding:6px}
+.qrcap{font-size:13px;font-weight:700;letter-spacing:.04em;color:var(--ink)}
 
 /* ---------- the paper strip (the hero) ---------- */
 .strip{
@@ -232,8 +239,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
   max-height:50vh;width:auto;display:block;margin:0 auto 20px;
   box-shadow:6px 6px 0 var(--ink);
 }
-#qrBox{background:#fff;border:2.5px solid var(--ink);border-radius:14px;padding:12px;display:none;margin:0 auto 18px;box-shadow:4px 4px 0 var(--ink)}
-#qrBox canvas{display:block}
+#qrBox{display:none;margin:0 auto 14px}
 
 /* ---------- copies dialog ---------- */
 .modal{
@@ -426,7 +432,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
   <div class="body">
     <div class="center">
       <h1>Thank you</h1>
-      <div id="qrBox"><canvas id="qrCanvas"></canvas></div>
+      <div id="qrBox"><div id="qrRow"></div></div>
       <p class="lead" id="doneLead">Scan the code to keep a digital copy</p>
       <!-- Why there is no QR. Silence here cost an evening once. -->
       <p class="note" id="qrNote" style="display:none;max-width:40ch;margin:-10px auto 16px"></p>

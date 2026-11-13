@@ -16,6 +16,7 @@
     bursts: [],         // [before, shutter, after] per slot, when the layout animates
     sheetFrames: null,  // one composed colour strip per burst index
     loopTimer: null,
+    links: [],          // public URL per download kind
     gifBlob: null,      // encoded animated strip
     gifJob: null,       // the encode, started while the guest reviews
     sheet: null,        // composed canvas, print resolution
@@ -346,28 +347,42 @@
     flash.classList.add("fire");
   }
 
+  /** Which frame of the burst is the shutter moment, and therefore
+      the one that prints. Clamped so a bad setting cannot land
+      outside the burst. */
+  function shutterIndex(n) {
+    const want = CFG.GIF_SHUTTER_INDEX == null ? 1 : CFG.GIF_SHUTTER_INDEX;
+    return Math.min(Math.max(0, want), n - 1);
+  }
+
   /**
-   * Three frames around one shutter press: before, at, after.
+   * A short burst around one shutter press. At the default settings
+   * that is four frames 180 ms apart, with the shutter on the second,
+   * so one lands before the pose settles and two after it.
    *
-   * The flash fires first rather than on the middle frame, because it
-   * is a white overlay across the preview and lights the subject off
-   * the screen. Firing it mid-burst would brighten only frame two and
-   * the loop would pulse.
+   * The flash fires once at the start rather than on the shutter
+   * frame. It is a white overlay across the preview and lights the
+   * subject off the screen, so firing it mid-burst would brighten one
+   * frame alone and the loop would pulse.
    *
-   * All three come off the same preview stream by default so their
-   * exposure matches. CFG.GIF_STILL_SOURCE = "photo" swaps the middle
-   * one for a full ImageCapture still, which is cleaner in a dim room
-   * but stalls the burst and shifts the exposure.
+   * Every frame comes off the same preview stream by default so the
+   * exposure matches. CFG.GIF_STILL_SOURCE = "photo" swaps the
+   * shutter frame for a full ImageCapture still: cleaner in a dim
+   * room, but it stalls the burst and shifts that frame's exposure.
    */
   async function captureBurst() {
     const gap = CFG.GIF_FRAME_GAP_MS == null ? 180 : CFG.GIF_FRAME_GAP_MS;
+    const n = Math.max(2, Math.min(8, CFG.GIF_FRAMES || 4));
+    const hero = shutterIndex(n);
+    const out = [];
     fireFlash();
-    const before = grabFrame();
-    await waitMs(gap);
-    const hero = CFG.GIF_STILL_SOURCE === "photo" ? await capturePhoto() : grabFrame();
-    await waitMs(gap);
-    const after = grabFrame();
-    return [before, hero, after];
+    for (let i = 0; i < n; i++) {
+      if (i) await waitMs(gap);
+      out.push(i === hero && CFG.GIF_STILL_SOURCE === "photo"
+        ? await capturePhoto()
+        : grabFrame());
+    }
+    return out;
   }
 
   /**
@@ -458,7 +473,7 @@
     if (gifOn()) {
       const burst = await captureBurst();
       state.bursts.push(burst);
-      state.shots.push(burst[1]);      // the middle frame is the one that prints
+      state.shots.push(burst[shutterIndex(burst.length)]);   // this one prints
     } else {
       fireFlash();
       state.bursts.push(null);
@@ -577,6 +592,7 @@
     if (!gifOn() || !state.sheetFrames || !window.Animate) return;
     if (!window.Animate.isSupported()) return;
     state.gifJob = window.Animate.encode(state.sheetFrames, {
+      heroIndex: shutterIndex(state.sheetFrames.length),
       width: CFG.GIF_WIDTH,
       maxColors: CFG.GIF_MAX_COLORS,
       frameMs: CFG.GIF_FRAME_MS,
@@ -645,14 +661,58 @@
     return state.sheetDisplay || state.sheet;
   }
 
-  /* When the layout animates, the animated strip IS the keepsake —
-     a guest who posed for a moving photo does not want a still. The
-     print is unaffected either way. */
-  async function keepsakeBlob() {
-    if (gifOn()) {
+  /* ---------------- what a guest can take away ----------------
+     Three kinds, each with its own QR on the done screen: the colour
+     strip, a black and white one, and the animation. Save and Share
+     hand over the colour one — those are the operator's buttons, and
+     the QRs are how a guest actually gets anything. */
+
+  const KIND_LABEL = { color: "Colour", bw: "Black & white", gif: "Animated" };
+
+  async function buildVariant(kind) {
+    if (kind === "gif") {
+      if (!gifOn()) return null;
       const g = await gifBlob();
-      if (g) return { blob: g, ext: "gif", type: "image/gif" };
+      return g ? { kind: kind, blob: g, ext: "gif", type: "image/gif" } : null;
     }
+
+    const src = keepsake();
+    if (!src) return null;
+
+    if (kind === "bw") {
+      /* "print" hands over the exact bitmap that went to the printer:
+         the digital twin of the paper, dither grain and all. It suits
+         the newspaper layouts, but at phone size it reads as noise,
+         so a clean desaturation is the default. */
+      let c;
+      if (CFG.BW_STYLE === "print" && state.prepared) {
+        c = window.Imaging.bitsToCanvas(state.prepared);
+      } else {
+        c = window.Imaging.toGrayscale(src);
+      }
+      return { kind: kind, blob: await canvasToBlob(c, "image/jpeg", 0.92), ext: "jpg", type: "image/jpeg" };
+    }
+
+    return { kind: kind, blob: await canvasToBlob(src, "image/jpeg", 0.92), ext: "jpg", type: "image/jpeg" };
+  }
+
+  /** Every kind this session can actually offer, in config order. */
+  async function buildVariants() {
+    const want = CFG.DOWNLOADS && CFG.DOWNLOADS.length ? CFG.DOWNLOADS : ["color"];
+    const out = [];
+    for (const kind of want) {
+      try {
+        const v = await buildVariant(kind);
+        if (v) out.push(v);
+      } catch (e) {
+        console.warn("Could not build the " + kind + " copy:", e && e.message);
+      }
+    }
+    return out;
+  }
+
+  /** Save and Share stay on the colour strip. */
+  async function keepsakeBlob() {
     const src = keepsake();
     if (!src) return null;
     return { blob: await canvasToBlob(src, "image/jpeg", 0.92), ext: "jpg", type: "image/jpeg" };
@@ -809,6 +869,29 @@
   /* Say why there is no QR. Every branch below used to fall back to
      the same cheerful line, so a broken bucket, a missing library and
      a deliberately offline booth all looked identical. */
+  /** One labelled QR per kind. Three codes beat one code behind a
+      menu: a guest scans the one they want and walks away. */
+  async function paintQrs(links) {
+    const wrap = $("qrRow");
+    wrap.innerHTML = "";
+    for (const l of links) {
+      const cell = document.createElement("div");
+      cell.className = "qrcell";
+      const cv = document.createElement("canvas");
+      await window.QRCode.toCanvas(cv, l.url, { width: 168, margin: 1 });
+      const cap = document.createElement("div");
+      cap.className = "qrcap";
+      cap.textContent = KIND_LABEL[l.kind] || l.kind;
+      cell.appendChild(cv);
+      cell.appendChild(cap);
+      wrap.appendChild(cell);
+    }
+    $("qrBox").style.display = "block";
+    $("doneLead").textContent = links.length > 1
+      ? "Scan whichever one you want"
+      : "Scan the code to keep a digital copy";
+  }
+
   function hideNote() {
     const note = $("qrNote");
     if (note) { note.style.display = "none"; note.textContent = ""; }
@@ -829,6 +912,8 @@
 
   async function finishSession(copies) {
     $("qrBox").style.display = "none";
+    $("qrRow").innerHTML = "";
+    state.links = [];
     noQr("");
     state.guestUrl = null;
 
@@ -849,29 +934,37 @@
     }
 
     try {
-      /* Upload whichever one the guest is actually being given. On an
-         animating layout that is the GIF, so the QR leads to something
-         that moves; otherwise the still. Only one file goes up — venue
-         wifi is the slowest part of this whole machine. */
-      const k = await keepsakeBlob();
-      if (!k) throw new Error("nothing to upload");
+      const variants = await buildVariants();
+      if (!variants.length) throw new Error("nothing to upload");
 
+      /* One file per kind. They go up one after another rather than
+         all at once: a venue's uplink is narrow, and three parallel
+         uploads just make all three slow instead of finishing the
+         first one early. */
       const d = new Date();
-      const path = d.toISOString().slice(0, 10) + "/" +
-                   d.toISOString().slice(11, 19).replace(/:/g, "") + "-" + uid(4) + "." + k.ext;
+      const stem = d.toISOString().slice(0, 10) + "/" +
+                   d.toISOString().slice(11, 19).replace(/:/g, "") + "-" + uid(4);
 
-      const up = await supabase.storage
-        .from(CFG.PHOTO_BUCKET)
-        .upload(path, k.blob, { contentType: k.type, upsert: false });
-      if (up.error) throw up.error;
+      const links = [];
+      for (const v of variants) {
+        const path = stem + "-" + v.kind + "." + v.ext;
+        const up = await supabase.storage
+          .from(CFG.PHOTO_BUCKET)
+          .upload(path, v.blob, { contentType: v.type, upsert: false });
+        if (up.error) throw up.error;
+        const { data: pub } = supabase.storage.from(CFG.PHOTO_BUCKET).getPublicUrl(path);
+        links.push({ kind: v.kind, url: pub.publicUrl, path: path });
+      }
 
-      const { data: pub } = supabase.storage.from(CFG.PHOTO_BUCKET).getPublicUrl(path);
-      state.guestUrl = pub.publicUrl;
+      state.links = links;
+      // The colour copy is the one everything else points at.
+      const main = links.filter(l => l.kind === "color")[0] || links[0];
+      state.guestUrl = main.url;
 
       const ins = await supabase.from("prints").insert({
         session_id: state.sessionId,
         frame_id: String(state.frame.id),
-        storage_path: path,
+        storage_path: main.path,
         copies: Math.max(1, copies || 1)
       });
       if (ins.error) console.warn("prints insert:", ins.error.message);
@@ -881,9 +974,7 @@
       if (!CFG.SHOW_QR) { noQr(""); return; }
       if (!window.QRCode) { noQr("the QR library didn't load"); return; }
 
-      await window.QRCode.toCanvas($("qrCanvas"), state.guestUrl, { width: 200, margin: 1 });
-      $("qrBox").style.display = "block";
-      $("doneLead").textContent = "Scan the code to keep a digital copy";
+      await paintQrs(links);
       hideNote();          // NOT noQr(""), which resets the lead text
     } catch (e) {
       console.warn("Upload failed:", e && e.message);
@@ -920,6 +1011,7 @@
     state.sheetFrames = null;
     state.gifBlob = null;
     state.gifJob = null;
+    state.links = [];
     state.frame = null;
     state.sheet = null;
     state.sheetDisplay = null;

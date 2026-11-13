@@ -705,6 +705,34 @@
     return c;
   };
 
+  /**
+   * A desaturated copy of the colour strip.
+   *
+   * Rec. 709 luma rather than an average of the channels: averaging
+   * turns a red dress and a blue one into the same grey, and skin
+   * goes flat. The photos are then lifted slightly, because a strip
+   * that looked right in colour reads muddy once the hue is gone.
+   */
+  Imaging.toGrayscale = function (src, opts) {
+    opts = opts || {};
+    const lift = opts.contrast == null ? 1.12 : opts.contrast;
+    const c = document.createElement("canvas");
+    c.width = src.width;
+    c.height = src.height;
+    const ctx = c.getContext("2d");
+    ctx.drawImage(src, 0, 0);
+    const img = ctx.getImageData(0, 0, c.width, c.height);
+    const d = img.data;
+    for (let i = 0; i < d.length; i += 4) {
+      let y = 0.2126 * d[i] + 0.7152 * d[i + 1] + 0.0722 * d[i + 2];
+      y = 128 + (y - 128) * lift;
+      const v = y < 0 ? 0 : y > 255 ? 255 : y;
+      d[i] = d[i + 1] = d[i + 2] = v;
+    }
+    ctx.putImageData(img, 0, 0);
+    return c;
+  };
+
   /* Measuring text against a fallback face and then drawing with the
      real one lays the strip out wrong, so compose waits for these. */
   Imaging.fontsReady = function () {
