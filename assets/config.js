@@ -10,7 +10,7 @@ window.CONFIG = {
      Shown at the bottom of Admin. If this does not match what you
      just deployed, the tablet is running an old copy: tap
      "Force update" there. Bump it with every deploy. ---- */
-  APP_VERSION: "v23",
+  APP_VERSION: "v24",
 
   /* ---- Branding (editable in Admin) ---- */
   BOOTH_NAME: "NUURAL BOOTH",
@@ -99,6 +99,12 @@ window.CONFIG = {
      Four rather than a dozen is deliberate. It is the photobooth
      look, and it keeps the file well under a megabyte, which is what
      decides whether a guest on venue wifi actually gets it. ---- */
+  // What the preview says before a pose. The boomerang line only
+  // shows on a layout that is actually animating.
+  HINT_READY: "Tap the button when ready",
+  HINT_BOOMERANG: "Tap the button when ready, it's a boomerang",
+  HINT_MOVING: "Keep moving!",   // shown while the burst is running
+
   GIF_ENABLED: true,         // master switch; each layout opts in too
   GIF_FRAMES: 4,             // frames captured per pose
   GIF_SHUTTER_INDEX: 1,      // which of them is the shutter moment

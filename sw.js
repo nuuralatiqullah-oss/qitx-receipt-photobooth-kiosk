@@ -14,7 +14,7 @@
    versioned, never change under the same URL, and should not
    cost a round trip at every event.
    ============================================================ */
-const VERSION = "v23";
+const VERSION = "v24";
 const CACHE = "kiosk-" + VERSION;
 const NET_TIMEOUT = 3000;
 

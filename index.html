@@ -210,6 +210,25 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
 .flash{position:absolute;inset:0;background:#fff;opacity:0;pointer-events:none}
 .flash.fire{animation:fl .45s ease-out}
 @keyframes fl{from{opacity:.95}to{opacity:0}}
+/* The per-frame snap. Shorter and softer than the single flash: it
+   fires once for every frame of the burst, and every frame is grabbed
+   the same delay after its own snap, so all four are lit alike. A
+   full-strength flash four times over would strobe. */
+.flash.snap{animation:snp .16s ease-out}
+@keyframes snp{from{opacity:.6}to{opacity:0}}
+
+/* One dot per frame of the burst, filling as each is taken, so four
+   snaps read as four frames and not as the camera misfiring. */
+/* A class that sets display beats the hidden attribute — same
+   specificity, later rule — so hidden has to be restated. */
+.snapdots[hidden]{display:none}
+.snapdots{
+  position:absolute;bottom:12px;left:50%;transform:translateX(-50%);
+  display:flex;gap:9px;z-index:3;pointer-events:none;
+  background:rgba(17,17,17,.74);border-radius:999px;padding:8px 13px;
+}
+.snapdots i{width:11px;height:11px;border-radius:50%;background:rgba(255,255,255,.34);display:block;transition:transform .12s ease}
+.snapdots i.on{background:#fff;transform:scale(1.25)}
 .shots{display:flex;gap:8px;justify-content:center;flex-wrap:wrap}
 .thumb{
   width:44px;height:58px;border-radius:8px;position:relative;overflow:hidden;
@@ -378,6 +397,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
         <video id="video" playsinline autoplay muted></video>
         <div class="hint" id="captureHint">Tap the button when ready</div>
         <div class="count" id="countdown">3</div>
+        <div class="snapdots" id="snapDots" hidden></div>
         <div class="flash" id="flash"></div>
       </div>
     </div>

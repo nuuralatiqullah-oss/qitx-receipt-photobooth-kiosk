@@ -40,6 +40,7 @@
     // without stopping it burns battery and, on a reprint, paints the
     // old session's frames over the new strip.
     if (id !== "scrReview") stopLoop();
+    if (id !== "scrCapture") hideSnapDots();
     document.querySelectorAll(".screen").forEach(s => s.classList.remove("active"));
     $(id).classList.add("active");
     resetIdle();
@@ -341,11 +342,50 @@
     return off.indexOf(f.id) === -1;
   }
 
+  function readyHint() {
+    return gifOn()
+      ? (CFG.HINT_BOOMERANG || "Tap the button when ready, it's a boomerang")
+      : (CFG.HINT_READY || "Tap the button when ready");
+  }
+
   function fireFlash() {
     const flash = $("flash");
-    flash.classList.remove("fire");
+    flash.classList.remove("fire", "snap");
     void flash.offsetWidth;
     flash.classList.add("fire");
+  }
+
+  /* The per-frame snap: shorter and softer than the single flash.
+     Every frame of the burst gets one, and every frame is grabbed the
+     same delay after its own snap, so all four end up lit alike. One
+     full-strength flash per frame would strobe, and a single flash at
+     the start would leave the later frames darker than the first. */
+  function fireSnap() {
+    const flash = $("flash");
+    flash.classList.remove("fire", "snap");
+    void flash.offsetWidth;
+    flash.classList.add("snap");
+  }
+
+  /** A dot per frame, so four snaps read as four frames rather than
+      as the camera misfiring. */
+  function showSnapDots(n) {
+    const box = $("snapDots");
+    box.innerHTML = "";
+    for (let i = 0; i < n; i++) box.appendChild(document.createElement("i"));
+    box.hidden = false;
+  }
+
+  function markSnapDot(i) {
+    const box = $("snapDots");
+    const dot = box.children[i];
+    if (dot) dot.className = "on";
+  }
+
+  function hideSnapDots() {
+    const box = $("snapDots");
+    box.hidden = true;
+    box.innerHTML = "";
   }
 
   /** Which frame of the burst is the shutter moment, and therefore
@@ -376,13 +416,20 @@
     const n = Math.max(2, Math.min(8, CFG.GIF_FRAMES || 4));
     const hero = shutterIndex(n);
     const out = [];
-    fireFlash();
+    showSnapDots(n);
+    $("captureHint").textContent = CFG.HINT_MOVING || "Keep moving!";
     for (let i = 0; i < n; i++) {
-      if (i) await waitMs(gap);
+      // Snap first, grab a beat later: the frame sitting in the video
+      // element lags the light by a frame or two, so grabbing on the
+      // same tick would catch the room before the screen lit it.
+      fireSnap();
+      await waitMs(gap);
       out.push(i === hero && CFG.GIF_STILL_SOURCE === "photo"
         ? await capturePhoto()
         : grabFrame());
+      markSnapDot(i);
     }
+    hideSnapDots();
     return out;
   }
 
@@ -506,7 +553,7 @@
         await buildSheet();
         show("scrReview");
       } else {
-        $("captureHint").textContent = "Tap the button when ready";
+        $("captureHint").textContent = readyHint();
       }
     } catch (e) {
       toast(e.message, true);
@@ -1040,6 +1087,7 @@
   function hardReset() {
     stopCamera();
     stopLoop();
+    hideSnapDots();
     state.shots = [];
     state.bursts = [];
     state.sheetFrames = null;
@@ -1060,7 +1108,7 @@
   async function goCapture() {
     state.shots = [];
     paintShots();
-    $("captureHint").textContent = "Tap the button when ready";
+    $("captureHint").textContent = readyHint();
     show("scrCapture");
     // The screen must be on-screen before the preview can be sized: a
     // hidden element measures zero and the sizing silently gives up.
