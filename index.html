@@ -117,6 +117,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
    flush against each other. .revacts has its own gap, so scope this
    to rows that are direct children of .center (the done screen). */
 .center > .row + .row{margin-top:12px}
+#btnSkipPrint{flex:0 1 190px}
 /* One QR per download kind, side by side. They wrap on a narrow
    screen rather than shrinking: a QR that is too small to scan is
    worse than one that needs a swipe to reach. */
@@ -409,7 +410,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
         <!-- No paper wanted: go straight to the codes. Also the way
              out when the printer is out of paper or not connected. -->
         <div class="row">
-          <button class="btn alt small" id="btnSkipPrint">Skip printing &mdash; just the QR codes</button>
+          <button class="btn alt small" id="btnSkipPrint">Skip</button>
         </div>
       </div>
     </div>
