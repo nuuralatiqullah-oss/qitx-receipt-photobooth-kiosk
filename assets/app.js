@@ -17,6 +17,7 @@
     sheetFrames: null,  // one composed colour strip per burst index
     loopTimer: null,
     links: [],          // public URL per download kind
+    printed: false,     // false when the guest skipped the paper
     gifBlob: null,      // encoded animated strip
     gifJob: null,       // the encode, started while the guest reviews
     sheet: null,        // composed canvas, print resolution
@@ -577,6 +578,9 @@
       }
     }
 
+    // Offer Skip only when it leads somewhere.
+    $("btnSkipPrint").style.display = canDeliverDigital() ? "" : "none";
+
     showPreview(state.sheetDisplay);
     playLoop();
     startEncode();
@@ -824,6 +828,33 @@
     }
   }
 
+  /**
+   * No paper this time: upload and show the codes.
+   *
+   * Also the graceful way out when the printer is unplugged or has
+   * run dry, which is why it does not check for a connection. The
+   * guest still leaves with their photos.
+   */
+  /** Is there actually a digital copy to skip TO? Without one, Skip
+      would send a guest away with neither paper nor photos. */
+  function canDeliverDigital() {
+    return CFG.UPLOAD_PHOTOS !== false && CFG.SHOW_QR !== false && !!supabase;
+  }
+
+  async function skipPrint() {
+    $("printingMsg").textContent = "Almost there…";
+    $("printingSub").textContent = "Getting your codes ready";
+    show("scrPrinting");
+    try {
+      await finishSession(0);
+    } catch (e) {
+      console.warn("Skip failed:", e && e.message);
+    }
+    $("printingMsg").textContent = "Printing…";
+    $("printingSub").textContent = "Take your strip from the printer";
+    show("scrDone");
+  }
+
   /* ---------------- supabase upload ---------------- */
 
   function canvasToBlob(canvas, type, quality) {
@@ -856,7 +887,7 @@
       await window.Settings.addPrint(blob, {
         printBlob: printBlob,
         gifBlob: gif,
-        copies: Math.max(1, copies || 1),
+        copies: Math.max(0, copies | 0),
         frameId: String(state.frame.id),
         frameName: state.frame.name,
         remoteUrl: remoteUrl || ""
@@ -901,7 +932,9 @@
      feature is off, or no project is configured — so the guest just
      gets the plain line with no alarming note under it. */
   function noQr(reason) {
-    $("doneLead").textContent = "Collect your print from the printer";
+    $("doneLead").textContent = state.printed
+      ? "Collect your print from the printer"
+      : "Sorry — no digital copy this time";
     hideNote();
     if (!reason) return;
     const note = $("qrNote");
@@ -911,6 +944,7 @@
   }
 
   async function finishSession(copies) {
+    state.printed = (copies | 0) > 0;
     $("qrBox").style.display = "none";
     $("qrRow").innerHTML = "";
     state.links = [];
@@ -965,7 +999,7 @@
         session_id: state.sessionId,
         frame_id: String(state.frame.id),
         storage_path: main.path,
-        copies: Math.max(1, copies || 1)
+        copies: Math.max(0, copies | 0)
       });
       if (ins.error) console.warn("prints insert:", ins.error.message);
 
@@ -1012,6 +1046,7 @@
     state.gifBlob = null;
     state.gifJob = null;
     state.links = [];
+    state.printed = false;
     state.frame = null;
     state.sheet = null;
     state.sheetDisplay = null;
@@ -1102,6 +1137,7 @@
       $("btnPrint").style.display = "none";
     }
     $("btnRetake").onclick = goCapture;
+    $("btnSkipPrint").onclick = skipPrint;
     $("btnSave").onclick = saveStrip;
     $("btnShare").onclick = shareStrip;
     // The same two on the done screen. keepsake() is still valid there

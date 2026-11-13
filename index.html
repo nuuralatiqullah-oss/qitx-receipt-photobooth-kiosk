@@ -406,6 +406,11 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
           <button class="btn alt small" id="btnSave">Save</button>
           <button class="btn blue small" id="btnShare">Share</button>
         </div>
+        <!-- No paper wanted: go straight to the codes. Also the way
+             out when the printer is out of paper or not connected. -->
+        <div class="row">
+          <button class="btn alt small" id="btnSkipPrint">Skip printing &mdash; just the QR codes</button>
+        </div>
       </div>
     </div>
   </div>
@@ -417,7 +422,7 @@ h2{font-family:Fredoka,'Trebuchet MS','Segoe UI Rounded',system-ui,sans-serif;fo
     <div class="center">
       <div class="spin"></div>
       <h2 id="printingMsg">Printing…</h2>
-      <p class="lead">Take your strip from the printer</p>
+      <p class="lead" id="printingSub">Take your strip from the printer</p>
     </div>
   </div>
 </section>
