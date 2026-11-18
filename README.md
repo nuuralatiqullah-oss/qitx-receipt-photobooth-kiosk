@@ -1,415 +1,475 @@
-# Photobooth Kiosk
+# QITX Receipt Photobooth
 
-A browser photobooth for a tablet: pick a frame, take photos, print on a
-Citizen CT-S310II thermal printer over USB. Static site — hosts on GitHub
-Pages, stores photos in Supabase.
+A photobooth that runs entirely in a browser tab. Guests pose, the strip
+prints on thermal receipt paper, and they scan a QR to take home a colour
+copy, a black and white one, and a four-frame boomerang GIF.
 
-Flow: **Welcome → Select Frame → Capture → Review → Print → QR / Done**
+No server, no app, no print driver. A static site on GitHub Pages talking
+to a USB printer through WebUSB, with Supabase holding the photos guests
+scan for.
+
+**Flow:** Welcome → pick a layout → four-frame capture → review →
+**Print** *or* **Skip** → three QR codes.
 
 ---
 
-## Can this actually work? Yes
+## What you need
 
-| Requirement | Why it works |
+| | |
 |---|---|
-| Printing from a web page | The printer speaks **ESC/POS**, so WebUSB can send it raster bytes directly. No driver, no print dialog. |
-| Hosting on GitHub Pages | WebUSB and the camera need **HTTPS**. Pages is HTTPS by default. |
-| Supabase from a static site | The anon key is public by design. RLS limits it to "read frames, insert prints, upload photos". |
-| Running on the Redmi Pad 2 9.7 | Chrome for Android supports WebUSB + `getUserMedia`. Printer connects by **USB-C OTG**. |
+| **Tablet** | Redmi Pad 2 (11", 254.6 × 166 mm) running Chrome for Android. Anything with Chrome, a camera and USB-C OTG works. |
+| **Printer** | Gainscha GA-C180I, 80 mm thermal, auto-cutter. Any ESC/POS receipt printer should work — it speaks raster bytes, not a driver. |
+| **Cable** | USB-C OTG adapter plus the printer's USB-B lead. |
+| **Paper** | 80 mm thermal rolls. Good ones — see *Broken blacks* below. |
+| **Hosting** | GitHub Pages. WebUSB and the camera both require HTTPS. |
+| **Backend** | A Supabase project, for the QR downloads. Optional; without it the booth still prints. |
 
-The one thing to test early is **OTG**: plug the printer into the tablet
-with a USB-C OTG cable and see whether Chrome shows the device chooser. If
-the tablet won't power or enumerate the printer, see *Troubleshooting*.
+The one thing to test before anything else is **OTG**: plug the printer
+into the tablet and see whether Chrome shows a device chooser. If the
+tablet can't power the printer, you need a powered hub — see
+*Troubleshooting*.
 
 ---
 
-## Install it on the tablet
+## What a guest walks away with
 
-Open the booth in Chrome, then **menu → Add to Home screen**. It installs
-as a fullscreen app with no address bar. Turn on Android **screen
-pinning** as well so guests can't leave the page.
+**On paper:** a newspaper-style strip, 1-bit black and white at 203 dpi,
+auto-cut.
 
-**Stuck in portrait?** The manifest sets the orientation at install
-time, so an app installed from an older build keeps whatever it had.
-Set it in **Admin → Camera → Screen** — that applies immediately with
-no reinstall. To clear it properly, uninstall the app from the home
-screen and add it again.
+**On their phone**, three QR codes on the last screen:
 
-Once installed it keeps working with no internet: the app shell is
-cached by a service worker. **Open it once while online before the
-event** so the fonts and libraries are cached too.
+| | |
+|---|---|
+| **Colour** | The full-colour strip at twice print size. |
+| **Black & white** | A clean desaturated copy. Set `BW_STYLE: "print"` to hand over the exact dithered bitmap that went to the printer instead — the digital twin of the paper, grain and all. |
+| **Animated** | A looping GIF, around 80 KB. |
 
-After you push a change, bump `CACHE` in `sw.js` — otherwise tablets
-keep serving the version they already have.
+Each is uploaded as its own file and gets its own labelled code, so a
+guest scans the one they want and walks away. Drop any of them from
+`DOWNLOADS` in config to stop offering it.
 
-## Two versions of every strip
+**Skip** on the review screen goes straight to the codes without
+printing. It's also the graceful way out when the printer is unplugged
+or out of paper — it deliberately doesn't check for a connection, so the
+guest still leaves with their photos. It hides itself when there's no
+Supabase, because then there'd be nothing to skip to.
 
-The booth makes each strip twice:
+---
 
-- **The keepsake** — full colour, twice print size (~1150px wide). This
-  is what guests see on the review screen, and what Save, Share, the QR
-  download and the Admin photo list all use.
-- **The print** — black and white dots at 203 dpi, because that is all
-  a thermal head can put on paper.
+## The boomerang
 
-So the screen looks like a normal photo while the paper looks like a
-receipt. Both are kept on the tablet, so a reprint comes out identical
-to the original rather than being re-processed.
+Every pose captures **four frames** about 180 ms apart rather than one
+still. The frame at `GIF_SHUTTER_INDEX` (the second, by default) is the
+one that prints and saves, so the paper strip is unaffected. All four
+compose into complete strips and encode as a GIF played 1‑2‑3‑4‑3‑2 —
+ping-pong, so the loop has no seam.
 
-To see exactly how a print will land before committing paper, use
-**Admin → Printer → Settings test**.
+Four frames is not a compromise. It's the photobooth look, and it keeps
+the file under 100 KB, which is what decides whether a guest on venue
+wifi actually receives it.
 
-## Uploading your own template
+The preview says **"Tap the button when ready, it's a boomerang"** on a
+layout that animates, and the plain line on one that doesn't. After the
+countdown, four dots fill one by one and the preview flashes once per
+frame, so four snaps read as four frames rather than as the camera
+misfiring.
 
-**Admin → Layouts → Upload a template.** Pick a PNG with see-through
-holes where the photos go. The holes are found automatically — there
-are no coordinates to type — and the preview outlines each one in pink
-so you can check before saving.
+That flash is deliberately a short, soft pulse rather than the single
+full-strength one used for stills. It's a white overlay that lights the
+subject off the screen: four full flashes would strobe, and one flash at
+the start would leave the later frames darker than the first. Every
+frame is grabbed the same delay after its own pulse, so all four are lit
+alike.
 
-Designing one:
+Animation is **per layout** — Admin → Layouts → *GIF on / GIF off* — so
+a busy queue can run a still-only strip while the premium one moves.
 
-- **576 px wide** matches the paper exactly (any width is scaled to fit).
-- Punch the photo areas out to **full transparency**. A flat JPEG has no
-  holes, and the uploader will say so rather than failing quietly.
-- Each hole should be a clean rectangle. Specks and hairline gaps are
-  ignored; a ragged cut-out may not be recognised.
-- Put your own wording in the artwork — an uploaded template replaces
-  the built-in booth name and footer.
-- Design for the printer: **no grey, no colour, 203 dpi.** Bold shapes,
-  heavy type and plenty of white. Fine detail and dark fills turn to mush.
+---
 
-Templates are stored on the tablet, so they work offline, and they are
-deleted along with the layout.
+## Quick start
 
-## When the QR appears
+### 1. Deploy
 
-On the **last screen, after the strip has printed** — not before. The
-sequence is: print finishes → the colour copy uploads to Supabase →
-the QR is drawn from that photo's public link → the Done screen shows
-it with "Scan the code to keep a digital copy".
+```bash
+git clone https://github.com/<you>/<repo>.git
+cd <repo>
+# edit assets/config.js for your Supabase project
+git commit -am "Configure" && git push
+```
 
-It is skipped, silently, if any of these is true:
+**Settings → Pages → Deploy from a branch → main / (root)**. Your booth
+lands at `https://<you>.github.io/<repo>/`. Nothing to build — it's plain
+HTML and JavaScript.
 
-- Supabase isn't reachable or the upload failed
-- `supabase-setup.sql` hasn't been run, so the bucket or policy is missing
-- **Upload to Supabase** or **Show a QR code** is off (Admin → Camera)
-- The printer failed, so the session never reached the Done screen
+### 2. Supabase
 
-When it's skipped the Done screen says "Collect your print from the
-printer" instead. Check it with **Admin → Printer → Supabase → Test
-connection**, which names whichever step is missing.
+Credentials live in `assets/config.js` and are **deliberately not
+editable from Admin** — a value saved on one tablet kept overriding
+later fixes, so the tablet copy is ignored and purged on load. To point
+at a different project, edit config.js and redeploy.
 
-## Getting photos to guests
-
-| Way | Good for | Needs |
-|---|---|---|
-| **QR code** | Guests, hands down — they scan and it opens on their own phone, no app, no typing | Supabase |
-| **Share** | Sending one strip from the tablet via WhatsApp or similar | Nothing |
-| **Save** | Keeping a copy on the tablet for later | Nothing |
-| **Admin → Photos** | Staff reprinting or sending a strip someone came back for | Nothing |
-
-The QR is the one worth setting up. Without Supabase the booth still
-captures, prints, saves and shares — guests just can't self-serve a
-digital copy.
-
-### Turning the QR on
-
-Credentials for the `wudqimkxqsylvakiuwuz` project are hardcoded in
-`assets/config.js` and are **not editable from Admin** — a value saved
-on a tablet once kept overriding later fixes, so the tablet copy is
-ignored and purged. To point at a different project, edit config.js and
-redeploy.
-
-A publishable key is designed to sit in public client code — **but only
-because Row Level Security is on**, so step 1 below is not optional.
-
-1. In your Supabase project, **SQL Editor** → paste all of
-   `supabase-setup.sql` → Run. Safe to re-run.
+1. **SQL Editor** → paste all of `supabase-setup.sql` → Run. Safe to
+   re-run.
 2. **Project Settings → Data API** → copy the Project URL.
    **Project Settings → API Keys** → copy the **publishable** key
    (`sb_publishable_…`). Never the secret one — this is a public repo.
-3. **Admin → Printer → Supabase → Test connection.** The fields are
-   read-only; they show what the booth is actually using.
+3. Put both in `assets/config.js` and push.
+4. **Admin → Printer → Test connection.** The fields are read-only;
+   they show what the booth is actually using.
 
-The test walks the same path the booth takes when it prints: it uploads
-a file, reads it back over the public URL, writes a row to `prints`,
-then cleans up after itself. If a step fails it names that step, so you
-know whether to re-run the SQL or make the bucket public.
+A publishable key is designed to sit in public client code — **but only
+because Row Level Security is on**, which is what step 1 sets up. It is
+not optional.
 
-Then on the **Camera** tab make sure **Upload to Supabase** and
-**Show a QR code** are both on.
+The test walks the same path the booth takes when it prints: uploads a
+file, reads it back over the public URL, writes a row to `prints`, then
+cleans up after itself. If a step fails it names that step, so you know
+whether to re-run the SQL or make the bucket public.
 
-## Framing: what you see is what prints
+> The `booth-photos` bucket is **public**, because a QR has to open
+> without a login. Anyone with the link can see that photo. If you'd
+> rather not, make the bucket private and switch to signed URLs, or turn
+> `SHOW_QR` off and keep the prints paper-only.
 
-The camera preview is set to the exact shape of the photo slot being
-filled, and the capture is cropped to that same shape. A guest framing
-themselves in the preview gets precisely that on paper — nothing is
-trimmed afterwards.
+### 3. Printer
 
-Because slots in one layout can differ (Big Duo has a square and a
-4:3), the preview changes shape between shots. The thumbnail row under
-the preview shows the shots taken so far, with the one being taken now
-outlined.
+1. Open the booth in **Chrome** on the tablet.
+2. Tap **Printer** → pick your printer from the USB chooser. It lists
+   every USB device, so you don't need to know its vendor ID.
+3. Once connected, the Printer tab shows the name and USB IDs, e.g.
+   `GA-C180I (0x1a86:0x7584)`.
+4. **Admin → Printer → Test slip** to check the width and the cutter.
 
-In landscape the strip sits to the left of the preview with the button
-on the right; in portrait they stack. Both are tested at the Redmi Pad
-2's resolution.
+Chrome remembers the permission, so the booth reconnects silently after
+a reload. After a full tablet restart you may need to tap once more.
 
-## Remote shutter
+### 4. Lock it down for the event
 
-A Bluetooth selfie remote, keyboard or foot pedal can fire the shutter:
-they are all HID keyboards underneath, so whatever key they send
-arrives as a normal keypress. Defaults are Enter, Space and the numpad
-Enter. **Admin → Remote** shows what yours actually sends and can learn
-it with one press.
+- Chrome menu → **Add to Home screen**. It installs fullscreen with no
+  address bar.
+- Turn on Android **screen pinning** so guests can't leave the page.
+- Keep the tablet on the charger; it holds a wake lock while running.
+- **Open it once while online before the event** so the fonts and
+  libraries are cached.
 
-A remote press does whatever the current screen's main button does, so
-one button runs a whole session: Start → choose layout → shoot → print.
+---
 
-**The volume keys cannot be used.** Android handles them in the OS and
-never passes them to a web page — there is no API for it, in any
-browser, and no workaround from a website. If your remote only sends
-Volume Up:
+## Updating a tablet
 
-1. **Look for an iOS/Android switch on it.** Most have one. Android
-   mode sends Volume Up; iOS mode usually sends Enter, which works.
-   Flip it, re-pair, press again.
-2. Otherwise use a small Bluetooth keyboard, numeric keypad or USB foot
-   pedal — they all send real keys.
-3. Or skip the remote: turn on **Take all photos in one go** under
-   Admin → Remote, and a single tap runs the whole session with a pause
-   between poses.
+The service worker is **network-first** for the booth's own files with a
+3-second timeout, falling back to cache. An online tablet always runs
+current code; an offline one still opens.
 
-Media keys (play / pause / next) are also accepted. Android only routes
-those to a page that is playing something, so the booth loops a silent
-clip to hold a media session open.
+After you push:
 
-Presses inside 600ms of each other count once — these remotes bounce.
+1. Bump `VERSION` in `sw.js` and `APP_VERSION` in `assets/config.js`.
+   Keep them the same.
+2. On the tablet, open **Admin**. The bottom bar shows the build, e.g.
+   `Build v24`. If it doesn't match what you deployed, tap **Force
+   update** — it clears every cache, unregisters the worker and reloads
+   cache-busted.
+
+The build stamp compares the config the page loaded against the version
+the service worker reports, so a stale copy is visible rather than
+guessed at.
+
+---
+
+## The four layouts
+
+Vintage newspaper styling: masthead with ornaments, dateline ears, heavy
+display headline, reversed section banners, ornamented kickers between
+photos, date stamp.
+
+| Layout | Photos | Length |
+|---|---|---|
+| **Classic Strip** | 3 | 185 mm |
+| **Big Duo** | 2 | 150 mm |
+| **Quad Grid** | 4 | 109 mm |
+| **Single Shot** | 1 | 95 mm |
+
+Layouts are a **stack of blocks**, not hardcoded rectangles. A builder
+walks the stack, gives every block a y and a height, and the strip ends
+where the last block ends. That's what keeps them short: nothing is
+padded to a round number, so there's no dead paper anywhere, and a
+longer headline can't silently overlap the photo below it.
+
+### Editing the wording
+
+**Admin → Layouts → Words.** Every visible string on a strip is a named
+key with a default — masthead, headline, banners, the bits between
+photos, the dateline ears — stored per layout, so the four can read
+differently. Type something too long and it shrinks to fit rather than
+running off the roll.
+
+The date stamp stays automatic; that's data, not copy.
+
+### Typography, and why it looks like this
+
+The faces are chosen for the medium, not copied from a reference. Pinterest
+photobooth strips are laser prints at 300 dpi or better; this is a 203 dpi
+thermal head printing pure black or white. Blackletter mastheads and
+fine-hairline serifs turn to lace — the thin strokes drop out under the
+threshold while the thick ones bleed together.
+
+So: **Playfair Display at 900**, far heavier than a real newspaper would
+set, so every stem survives; and **Oswald 600** for small caps and
+reversed bars, because condensed fits more characters at a size the head
+can resolve and its even weight reverses out of black without the
+counters filling in. Both vendored in `assets/vendor/fonts/` — no CDN at
+event time.
+
+---
+
+## Uploading your own template
+
+**Admin → Layouts → Add template.** Pick a PNG with see-through holes
+where the photos go. The holes are found automatically — no coordinates
+to type — and the preview outlines each one so you can check before
+saving.
+
+- **576 px wide** matches the paper exactly (any width is scaled to fit).
+- Punch the photo areas out to **full transparency**. A flat JPEG has no
+  holes, and the uploader says so rather than failing quietly.
+- Each hole should be a clean rectangle. Specks and hairline gaps are
+  ignored; a ragged cut-out may not be recognised.
+- Put your wording in the artwork. An uploaded template has no block
+  stack, so the newspaper chrome and the Words editor don't apply to it.
+- Design for the printer: **no grey, no colour, 203 dpi.** Bold shapes,
+  heavy type, plenty of white.
+
+Templates are stored on the tablet, so they work offline.
+
+---
 
 ## Admin
 
 Tap **Admin** on the welcome screen. Default PIN is `1234`; change it on
-the Text tab. The PIN is stored in the browser in plain text — it keeps
-guests out during an event, it is not real security, so don't reuse a
-password you care about.
+the Text tab. It's stored in the browser in plain text — it keeps guests
+out during an event, it is not real security, so don't reuse a password
+you care about.
 
 | Tab | What it does |
 |---|---|
-| Text | Booth name, event name, welcome line, printed footer, PIN |
-| Layouts | Turn layouts on or off, add your own, delete yours |
-| Photos | Recent strips kept on the tablet — reprint, share, delete |
-| Remote | What your remote sends, shutter keys, hands-free mode |
-| Camera | Screen orientation, front/rear, mirror, capture width, countdown, copies, idle reset |
+| **Text** | Booth name, event name, welcome line, start button, PIN. Screen wording only — strip wording lives per layout. |
+| **Layouts** | Show/hide layouts, **Words** (per-layout strip text), **GIF on/off** per layout, upload and delete your own. |
+| **Photos** | Recent strips kept on the tablet — reprint, share, delete. |
+| **Camera** | Orientation, front/rear, mirror, capture width, countdown, copies, idle reset, uploads, QR. |
+| **Remote** | What your remote sends, shutter keys, hands-free mode. |
+| **Printer** | Connect, test slip, **Settings test**, **Printer diagnostic**, paper width, cut, dot size, dithering, speed and density, Supabase test, reset all. |
 
-Guests are asked how many copies when they tap Print, up to 5. Turn
-that off under **Camera** to print a fixed number instead.
-| Printer | Test prints, paper width, cut, dot size, dithering, speed and density, Supabase status |
+Settings save to the tablet and override `assets/config.js`. The booth
+picks them up on its next load.
 
-Everything saves to the tablet and overrides `assets/config.js`. The
-booth picks changes up on its next load. **Reset all settings** on the
-Printer tab puts everything back.
-
-Recent strips are stored on the tablet, so Photos works offline. Supabase
-is the off-device copy on top of that. **Share** uses the Android share
-sheet where available and falls back to a download.
-
-## 1. Deploy to GitHub Pages
-
-```bash
-git init
-git add .
-git commit -m "Photobooth kiosk"
-git branch -M main
-git remote add origin https://github.com/<you>/<repo>.git
-git push -u origin main
-```
-
-Then **Settings → Pages → Source: Deploy from a branch → main / (root)**.
-Your kiosk lands at `https://<you>.github.io/<repo>/`.
-
-Nothing to build — it's plain HTML/JS.
-
-## 2. Supabase (optional, for photo backup + QR download)
-
-1. Create a project at supabase.com.
-2. **SQL Editor** → paste all of `supabase-setup.sql` → Run. Safe to re-run.
-3. **Project Settings → API** → copy the Project URL and the **anon public** key.
-4. Put them in `assets/config.js`, push again.
-
-Leave `SUPABASE_URL` blank and the booth still works — it just won't
-upload or show a QR code.
-
-> The `booth-photos` bucket is **public**, because the QR has to open
-> without a login. Anyone with the link can view that photo. If you'd
-> rather not, set the bucket private and switch to signed URLs, or turn
-> `SHOW_QR` off and keep the prints paper-only.
-
-## 3. Set up the printer
-
-1. Open the kiosk in **Chrome** on the tablet.
-2. Tap **Printer** (top right) → pick the Citizen in the USB chooser.
-3. Tap **Printer** again — it now prints a short test slip. Check that
-   the text isn't cut off on the right and that the cutter fires.
-
-Chrome remembers the permission, so after a reload the kiosk reconnects
-silently. After a full tablet restart you may need to tap once more.
-
-## 4. Lock it down for the event
-
-- Install as an app: Chrome menu → **Add to Home screen** (runs fullscreen).
-- Turn on Android **screen pinning** so guests can't leave the page.
-- Keep the tablet on the charger; it holds a wake lock while running.
+Recent strips are stored locally so Photos works offline, bounded by
+**both** a count (`KEEP_LOCAL_COPIES`) and a byte budget
+(`MAX_LOCAL_BYTES`, 60 MB). A record used to be one JPEG; with a GIF
+beside it, "keep 40" stopped describing how much disk that is.
 
 ---
 
-## Tuning `assets/config.js`
+## Framing: what you see is what prints
 
-| Setting | What to change it for |
+The camera preview is set to the exact shape of the slot being filled,
+and the capture is cropped to that same shape. A guest framing
+themselves in the preview gets precisely that on paper.
+
+Because slots in one layout can differ, the preview changes shape
+between shots. The thumbnail row shows the shots taken so far with the
+current one outlined.
+
+---
+
+## Remote shutter
+
+A Bluetooth selfie remote, keyboard or foot pedal can fire the shutter —
+they're all HID keyboards underneath. Defaults are Enter, Space and
+numpad Enter. **Admin → Remote** shows what yours actually sends and can
+learn it with one press.
+
+A remote press does whatever the current screen's main button does, so
+one button runs a whole session.
+
+**The volume keys cannot be used.** Android handles them in the OS and
+never passes them to a web page — no API, no browser, no workaround from
+a website. If your remote only sends Volume Up:
+
+1. **Look for an iOS/Android switch on it.** Most have one. Android mode
+   sends Volume Up; iOS mode usually sends Enter, which works. Flip it,
+   re-pair, press again.
+2. Otherwise use a small Bluetooth keyboard, numeric keypad or USB foot
+   pedal.
+3. Or skip the remote: turn on **Take all photos in one go** under
+   Admin → Remote, and one tap runs the whole session.
+
+Media keys are also accepted. Android only routes those to a page that's
+playing something, so the booth loops a silent clip to hold a media
+session open. Presses within 600 ms count once — these remotes bounce.
+
+---
+
+## Config reference
+
+`assets/config.js` holds the defaults. Admin overrides them per tablet.
+
+### Print
+
+| Setting | For |
 |---|---|
-| `PRINT_WIDTH_DOTS` | `576` for 80mm paper, `384` for 58mm. Wrong value = cropped prints. |
-| `CUT_MODE` | `"partial"` leaves a tab to tear; `"full"` cuts clean through. |
+| `PRINT_WIDTH_DOTS` | `576` for 80 mm paper, `384` for 58 mm. Wrong value = cropped prints. |
+| `CUT_MODE` | `"partial"` leaves a tab to tear; `"full"` cuts through. |
+| `FEED_BEFORE_CUT` | Raise if artwork hasn't cleared the blade. |
 | `PHOTO_DOT_SIZE` | **The main dial for photo quality.** `1` finest, `2` recommended, `3` chunky retro. |
-| `ADMIN_PIN` | PIN for the Admin page. |
-| `ALLOW_GUEST_PRINT` | `false` hides the guest Print button — staff print from Admin instead. |
-| `DITHER` | `"atkinson"` (clean, recommended) or `"floyd"` (finer but muddier). |
-| `PHOTO_GAMMA` | Lower (e.g. `0.7`) if prints are too dark. |
+| `DITHER` | `"atkinson"` (clean, recommended) or `"floyd"`. |
+| `PHOTO_GAMMA` | Lower (`0.7`) if prints are too dark. |
+| `PHOTO_LOCAL_CONTRAST` | Separates face from hair from clothing. `0.6` default. |
+| `PHOTO_SHARPEN` | Toward `1.2` for punchier edges. |
 | `PRINT_SPEED` | Lower number = slower = more heat per dot. Fixes broken blacks. |
-| `PRINT_DENSITY` | `0` standard, `1-127` darker, `128-255` paler. |
-| `PHOTO_LOCAL_CONTRAST` | Separates face from hair from clothing. `0.6` default, `1.0` graphic. |
-| `PHOTO_SHARPEN` | Raise toward `1.2` for punchier edges. |
-| `COUNTDOWN_SECONDS` | Seconds before each shot. |
-| `AUTO_PRINT_COPIES` | Print 2 copies per session (one for the guest, one for the guestbook). |
-| `IDLE_RESET_SECONDS` | Auto-return to the welcome screen between guests. |
+| `PRINT_DENSITY` | `0` standard, `1–127` darker, `128–255` paler. |
 
-## Custom frames
+### Boomerang and downloads
 
-Built-in layouts live in `assets/frames.js` (Classic Strip, Big Duo,
-Polaroid, Quad Grid). All coordinates are in **print dots at 576 wide**;
-the app rescales for 58mm paper automatically.
+| Setting | For |
+|---|---|
+| `GIF_ENABLED` | Master switch. Each layout opts in separately. |
+| `GIF_FRAMES` | Frames per pose. Default `4`. |
+| `GIF_SHUTTER_INDEX` | Which frame prints. Default `1`. |
+| `GIF_FRAME_GAP_MS` | Spacing between frames. Default `180`. |
+| `GIF_FRAME_MS` / `GIF_HOLD_MS` | Playback timing and the dwell on the last frame. |
+| `GIF_WIDTH` / `GIF_MAX_COLORS` | Encoded size and palette. |
+| `GIF_STILL_SOURCE` | `"preview"` (default) takes every frame off the live stream so exposure matches. `"photo"` uses a full `ImageCapture` still for the shutter frame — cleaner in a dim room, but it stalls the burst and shifts that frame's exposure. Judge it in your own venue lighting. |
+| `NO_GIF_FRAMES` | Layout ids with animation off. Set from Admin. |
+| `DOWNLOADS` | Which kinds to offer: `["color","bw","gif"]`. |
+| `BW_STYLE` | `"grayscale"` or `"print"`. |
+| `HINT_READY` / `HINT_BOOMERANG` / `HINT_MOVING` | Preview wording. |
 
-For a designed frame like the ZarenBooth templates:
+### Session
 
-1. Export a **576-px-wide transparent PNG** — transparent where the photos
-   go, artwork everywhere else.
-2. Upload it to the `booth-frames` bucket in Supabase.
-3. Insert a row in the `frames` table:
-
-```sql
-insert into public.frames (name, width, height, shots, slots, overlay_path, sort_order)
-values (
-  'Wedding Strip', 576, 1500, 3,
-  '[{"x":48,"y":150,"w":480,"h":360},
-    {"x":48,"y":530,"w":480,"h":360},
-    {"x":48,"y":910,"w":480,"h":360}]'::jsonb,
-  'wedding-strip.png', 1
-);
-```
-
-It appears in the picker on the next page load — no redeploy.
-
-Note that thermal output is **1-bit black and white**. Bold line art and
-big type survive; fine gradients and dark backgrounds turn to mush.
-Design frames with lots of white space.
+| Setting | For |
+|---|---|
+| `COUNTDOWN_SECONDS` | Seconds before each pose. |
+| `ASK_COPIES` / `MAX_COPIES` | Ask how many to print, up to 5. |
+| `AUTO_PRINT_COPIES` | Fixed number instead of asking. |
+| `AUTO_SEQUENCE` | One tap runs the whole session. |
+| `IDLE_RESET_SECONDS` | Return to welcome between guests. |
+| `ALLOW_GUEST_PRINT` | `false` hides the guest Print button. |
+| `UPLOAD_PHOTOS` / `SHOW_QR` | Turn the digital half off. |
+| `KEEP_LOCAL_COPIES` / `MAX_LOCAL_BYTES` | Local storage bounds. |
+| `ADMIN_PIN` | Change it. |
 
 ---
 
 ## Troubleshooting
 
-**"This browser can't talk to USB printers"** — You're on Safari, Firefox,
+**"This browser can't talk to USB printers"** — You're on Safari, Firefox
 or plain `http://`. Use Chrome or Edge over HTTPS.
 
-**Nothing in the USB chooser** — First, tap **Printer** a second time:
-the first tap filters by known vendor IDs, and if nothing matched, the
-second shows every USB device so you can pick the printer yourself. Many
-Gainscha/Gprinter units report an unpublished vendor ID and need this.
-
-If the list is still empty, the tablet isn't powering the printer over
-OTG. Use a powered USB hub between tablet and printer, or an OTG cable
-with its own power input.
+**Nothing in the USB chooser** — The tablet isn't powering the printer
+over OTG. Use a powered USB hub between tablet and printer, or an OTG
+cable with its own power input. (The chooser lists every USB device, so
+an unrecognised vendor ID is not the cause.)
 
 **"Could not claim the printer"** — Something else grabbed the interface.
-Unplug and replug, and close any Citizen utility app.
+Unplug and replug, and close any printer utility app.
 
-**Right side of the print is cut off** — You're on 58mm paper. Set
+**Right side of the print is cut off** — You're on 58 mm paper. Set
 `PRINT_WIDTH_DOTS: 384`.
 
-**Dark areas break up, streak or fade (but light areas are fine)** —
-Tap **Printer diagnostic** on the review screen. It prints solid black
-bars, a density ladder and 1-dot lines. Read it like this:
+**A fix you pushed isn't showing up** — Admin → check the build stamp →
+**Force update**. If that fails, Chrome → the site → padlock → Cookies
+and site data → Delete site data, then reinstall.
+
+**Dark areas break up, streak or fade (light areas fine)** —
+**Admin → Printer → Printer diagnostic.** It prints solid black bars, a
+density ladder and 1-dot lines.
 
 | What you see | Cause | Fix |
 |---|---|---|
-| White streaks running down the black bar, same columns every time | Dirt or residue on the print head | Clean it (below) |
-| Black bar fades toward the bottom | Head overheating | Lower `PRINT_DENSITY`, raise `PRINT_SPEED` number, shorter prints |
-| Only 75–100% patches look broken | Not enough energy per dot | Set `PRINT_SPEED: 2` (slower), then `PRINT_DENSITY: 4` |
+| White streaks down the black bar, same columns every time | Dirt on the print head | Clean it (below) |
+| Black bar fades toward the bottom | Head overheating | Lower `PRINT_DENSITY`, raise `PRINT_SPEED`, shorter prints |
+| Only 75–100% patches look broken | Not enough energy per dot | `PRINT_SPEED: 2`, then `PRINT_DENSITY: 4` |
 | Gaps in the 1-dot lines, same spots | Dead head elements | Head is worn — needs replacing |
 | All four look clean | Printer is fine | It's the photo or the pipeline |
 
-**Cleaning the print head** — this fixes most streaking and takes two
-minutes. Power the printer off and open the paper cover. The print head
-is the thin dark strip the paper slides under. Wipe it along its length
-with a cotton bud dampened with **isopropyl alcohol (90%+)**. Never use
-water, and never scrape it. Let it dry fully before closing. Do this
-every few thousand prints, or any time streaks appear.
+**Cleaning the print head** — fixes most streaking, takes two minutes.
+Power off, open the paper cover. The head is the thin dark strip the
+paper slides under. Wipe along its length with a cotton bud dampened
+with **isopropyl alcohol (90%+)**. Never water, never scrape. Let it dry
+fully before closing. Every few thousand prints, or any time streaks
+appear.
 
-**Other things that cause broken blacks**
+**Other causes of broken blacks**
 
-- **Paper quality.** Cheap or old thermal rolls have low sensitivity and
-  simply won't go properly black. Try a fresh, good-quality 80mm roll
-  before blaming the printer.
-- **Paper loaded with the wrong side up.** Thermal paper only prints on
-  one side. If prints are faint everywhere, flip the roll.
-- **Heat.** A head that has been printing dense images continuously will
-  throttle itself. Space out test prints.
-
-**Photos aren't sharp enough** — Take a photo, then tap **Print settings
-test** on the review screen. It prints the same shot four times (A-D) at
-different settings so you can compare on real paper, then set
-`PHOTO_DOT_SIZE` and `PHOTO_LOCAL_CONTRAST` to match the one you like.
-
-Be aware of the ceiling: a 480-dot photo slot at `PHOTO_DOT_SIZE: 2` gives
-the face about 130x170 pixels. Counter-intuitively **dot 2 usually looks
-sharper than dot 1** — at dot 1 the dithering scatters detail into fine
-noise that your eye averages back into grey, while chunkier dots survive.
-To genuinely gain detail, make the photo slot bigger (up to 576 dots wide)
-rather than reducing the dot size.
+- **Paper quality.** Cheap or old rolls have low sensitivity and simply
+  won't go properly black. Try a fresh good roll before blaming the
+  printer.
+- **Paper loaded wrong side up.** Thermal paper prints on one side only.
+  Faint everywhere? Flip the roll.
+- **Heat.** A head that's been printing dense images continuously
+  throttles itself. Space out test prints.
 
 **Photos print dark and muddy, but text is sharp** — This is not the
 printer. A thermal head spreads heat into neighbouring dots, so
-single-dot detail merges into solid black. Fixes, in order of impact:
+single-dot detail merges into solid black. In order of impact:
 
-1. **Light the subject's face.** A backlit guest (window or bright wall
-   behind them) is the single biggest cause. A cheap ring light on the
-   tablet fixes more than any setting here.
-2. **Raise `PHOTO_DOT_SIZE` to `2` or `3`.** Printing each photo pixel as
-   a 2x2 or 3x3 block of dots survives the bleed. Text is unaffected.
-3. **Lower `PHOTO_GAMMA`** to `0.7` or `0.65` to lighten midtones.
-4. **Turn the printer's print density down** in the Citizen utility or
-   DIP switches. Less heat means less spread.
-5. Keep `DITHER: "atkinson"`. Floyd-Steinberg pushes error into the
-   highlights and greys out clean white areas.
+1. **Light the subject's face.** A backlit guest is the single biggest
+   cause. A cheap ring light fixes more than any setting here.
+2. **Raise `PHOTO_DOT_SIZE` to `2` or `3`.** Printing each photo pixel
+   as a block survives the bleed. Text is unaffected.
+3. **Lower `PHOTO_GAMMA`** to `0.7`.
+4. **Turn the printer's density down.** Less heat, less spread.
+5. Keep `DITHER: "atkinson"`. Floyd–Steinberg pushes error into the
+   highlights and greys out clean whites.
 
-**Nothing cuts** — Try `CUT_MODE: "full"`, and raise `FEED_BEFORE_CUT` so
-the artwork clears the cutter blade before it fires.
+**Photos aren't sharp enough** — **Admin → Printer → Settings test**
+prints the same shot four times at different settings so you can compare
+on real paper.
 
-**Photos upload but the QR doesn't open** — The `booth-photos` bucket isn't
-public. Re-run `supabase-setup.sql`.
+Know the ceiling: a 544-dot slot at `PHOTO_DOT_SIZE: 2` gives a face
+about 130 × 170 pixels. Counter-intuitively **dot 2 usually looks
+sharper than dot 1** — at dot 1 the dithering scatters detail into fine
+noise the eye averages back into grey, while chunkier dots survive. To
+genuinely gain detail, make the slot bigger rather than the dots
+smaller.
+
+**Nothing cuts** — Try `CUT_MODE: "full"` and raise `FEED_BEFORE_CUT`.
+
+**Photos upload but the QR doesn't open** — The `booth-photos` bucket
+isn't public. Re-run `supabase-setup.sql`.
+
+**No QR at all** — The done screen now says why: missing bucket, missing
+policy, offline, library didn't load. **Admin → Printer → Test
+connection** names the broken step.
+
+**Stuck in portrait** — The manifest sets orientation at install time,
+so an app installed from an older build keeps what it had. Set it in
+**Admin → Camera → Screen**, which applies immediately. To clear it
+properly, uninstall from the home screen and add it again.
 
 ---
 
 ## Files
 
 ```
-index.html              booth screens + styling
-admin.html              settings, layouts, photos
-sw.js                   offline cache + installability
-manifest.webmanifest    install metadata
-assets/config.js        defaults (Admin overrides these per tablet)
-assets/settings.js      settings overlay + saved strips (IndexedDB)
-assets/admin.js         admin page logic
-assets/frames.js        built-in frame layouts
-assets/imaging.js       per-photo levels, gamma, dot size, Atkinson dither
-assets/printer.js       WebUSB + ESC/POS (raster, auto-cut)
-assets/app.js           kiosk flow
-supabase-setup.sql      tables, RLS, storage buckets
+index.html               booth screens + styling
+admin.html               settings, layouts, photos
+sw.js                    network-first cache + installability
+manifest.webmanifest     install metadata
+supabase-setup.sql       tables, RLS, storage buckets
+
+assets/config.js         defaults (Admin overrides per tablet)
+assets/settings.js       settings overlay, saved strips, per-layout wording
+assets/frames.js         the four layouts as block stacks
+assets/imaging.js        tone, dither, compose, newspaper chrome
+assets/animate.js        GIF encoding
+assets/printer.js        WebUSB + ESC/POS raster and cut
+assets/app.js            kiosk flow
+assets/admin.js          admin page
+assets/remote.js         remote shutter input
+assets/press.css         the two vendored faces
+
+assets/vendor/           supabase-js, qrcode, gifenc, fonts
 ```
+
+Everything third-party is vendored. A booth on venue wifi should not
+need a CDN to hand a guest their photo.
